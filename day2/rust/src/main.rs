@@ -36,6 +36,7 @@ fn is_not_alphanumeric(c: char) -> bool {
 struct Cyclops {
     horizontal: u16,
     depth: i32,
+    aim: i32,
 }
 
 impl Default for Cyclops {
@@ -43,6 +44,7 @@ impl Default for Cyclops {
         Cyclops {
             horizontal: 0,
             depth: 0,
+            aim: 0,
         }
     }
 }
@@ -50,8 +52,14 @@ impl Default for Cyclops {
 impl Cyclops {
     pub fn execute_command(&mut self, comm: Command) {
         match comm {
-            Command::Forward(val) => self.horizontal += val,
-            Command::ChangeDepth(val) => self.depth += val,
+            Command::Forward(val) => {
+                self.horizontal += val;
+                self.depth += self.aim * val as i32;
+            }
+            Command::Down(val) => {
+                self.aim += val as i32;
+            }
+            Command::Up(val) => self.aim -= val as i32,
         }
     }
 
@@ -63,7 +71,8 @@ impl Cyclops {
 #[derive(Debug, PartialEq)]
 enum Command {
     Forward(u16),
-    ChangeDepth(i32),
+    Up(u16),
+    Down(u16),
 }
 
 impl Command {
@@ -91,12 +100,12 @@ impl Command {
 
     fn parse_down(input: &str) -> (Command, &str) {
         let (value, remainder) = Command::read_value(input);
-        (Command::ChangeDepth(value as i32), remainder)
+        (Command::Down(value), remainder)
     }
 
     fn parse_up(input: &str) -> (Command, &str) {
         let (value, remainder) = Command::read_value(input);
-        (Command::ChangeDepth((value as i32) * -1), remainder)
+        (Command::Up(value), remainder)
     }
 
     fn read_value(input: &str) -> (u16, &str) {
@@ -127,31 +136,25 @@ mod tests {
     #[test]
     fn down_parse() {
         let input = "4";
-        assert_eq!(Command::parse_down(input), (Command::ChangeDepth(4), ""));
+        assert_eq!(Command::parse_down(input), (Command::Down(4), ""));
 
         let input = "4\n";
-        assert_eq!(Command::parse_down(input), (Command::ChangeDepth(4), "\n"));
+        assert_eq!(Command::parse_down(input), (Command::Down(4), "\n"));
 
         let input = "4\ndown";
-        assert_eq!(
-            Command::parse_down(input),
-            (Command::ChangeDepth(4), "\ndown")
-        );
+        assert_eq!(Command::parse_down(input), (Command::Down(4), "\ndown"));
     }
 
     #[test]
     fn up_parse() {
         let input = "4";
-        assert_eq!(Command::parse_up(input), (Command::ChangeDepth(-4), ""));
+        assert_eq!(Command::parse_up(input), (Command::Up(4), ""));
 
         let input = "4\n";
-        assert_eq!(Command::parse_up(input), (Command::ChangeDepth(-4), "\n"));
+        assert_eq!(Command::parse_up(input), (Command::Up(4), "\n"));
 
         let input = "4\ndown";
-        assert_eq!(
-            Command::parse_up(input),
-            (Command::ChangeDepth(-4), "\ndown")
-        );
+        assert_eq!(Command::parse_up(input), (Command::Up(4), "\ndown"));
     }
 
     #[test]
@@ -172,16 +175,13 @@ mod tests {
         assert_eq!(Command::parse(input), (Command::Forward(5), "\ndown"));
 
         let input = "up 5\ndown 2";
-        assert_eq!(
-            Command::parse(input),
-            (Command::ChangeDepth(-5), "\ndown 2")
-        );
+        assert_eq!(Command::parse(input), (Command::Up(5), "\ndown 2"));
 
         let input = "forward 5\n";
         assert_eq!(Command::parse(input), (Command::Forward(5), "\n"));
 
         let input = "down 5";
-        assert_eq!(Command::parse(input), (Command::ChangeDepth(5), ""));
+        assert_eq!(Command::parse(input), (Command::Down(5), ""));
     }
 
     #[test]
@@ -197,10 +197,10 @@ mod tests {
 
         let expected = vec![
             Command::Forward(5),
-            Command::ChangeDepth(5),
+            Command::Down(5),
             Command::Forward(8),
-            Command::ChangeDepth(-3),
-            Command::ChangeDepth(8),
+            Command::Up(3),
+            Command::Down(8),
             Command::Forward(2),
         ];
 
@@ -217,10 +217,10 @@ mod tests {
 
         let expected = vec![
             Command::Forward(5),
-            Command::ChangeDepth(5),
+            Command::Down(5),
             Command::Forward(8),
-            Command::ChangeDepth(-3),
-            Command::ChangeDepth(8),
+            Command::Up(3),
+            Command::Down(8),
             Command::Forward(2),
         ];
 
