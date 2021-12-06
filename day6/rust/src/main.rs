@@ -7,7 +7,6 @@ fn main() {
     for b in input {
         school_of_fish.add_fish(b);
     }
-    dbg!(&school_of_fish);
 
     for _ in 0..256 {
         school_of_fish.age();
