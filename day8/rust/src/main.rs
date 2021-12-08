@@ -9,35 +9,38 @@ use std::{io::Read, str::FromStr, string::ParseError};
 /// a!  : is unambigously identified
 /// -   : take segment of RHS from LHS
 /// - a : take segment from LHS
-/// !&  : NAND
+/// ^  : XOR
 /// &   : AND
 ///
 /// 1 => 2 digit -> c + f
-/// 7 => 3 digit -> c + f + a!
+/// 7 => 3 digit -> c + f + a
+/// 7 - 1 -> a!
 /// a!
 /// 4 => 4 digit -> c + f + b + d
 /// 8 => 7 digit
 /// 0 => 6 digit with 1 and !4
-/// 0 !& 8 -> d!
-/// 4 & d! -> b!
+/// 0 ^ 8 -> d!
+/// 4 ^ d! ^ 1 -> b!
 /// a! b! d!
 /// 9 => 6 segment & 4
 /// 9 - 4 - a! -> g!
 /// 3 => a! + d! + g! + 1
 /// a! b! d! g!
-/// 2 => 5 digit which is not 3
-/// 1 - 2 => f!
-/// 1 - f! => c!
-/// 2 - a! - d! - c! - g! => e!
+/// 2 => 5 digit with b! and does not contain 1
+/// 1 & 2 -> f!
+/// 1 ^ f! => c!
+/// 2 ^ a! ^ d! ^ c! ^ g! => e!
 /// a! b! c! d! e! f! g!
 fn main() {
     let digits = read_input();
     let cnt = digits.into_iter().fold(0, |count, line| {
-        let sample = line.iter().take_while(|d| d.store == 0).copied().collect();
-        let wiring = resolve_wiring(sample);
+        let wiring = resolve_wiring(line.clone());
 
         search_output(
-            line.into_iter().skip_while(|d| d.store != 0).collect(),
+            line.into_iter()
+                .skip_while(|d| d.store != 0)
+                .skip(1)
+                .collect(),
             &wiring[..],
         ) + count
     });
@@ -45,25 +48,25 @@ fn main() {
     println!("{}", cnt)
 }
 
-fn search_output(output: Vec<Digit>, wiring: &[Digit]) -> i32 {
-    let mut sum = 0;
+fn search_output(output: Vec<Digit>, wiring: &[Digit]) -> u64 {
+    let mut decoded = vec![];
     for d in output {
-        if d.store == wiring[1].store
-            || d.store == wiring[3].store
-            || d.store == wiring[4].store
-            || d.store == wiring[8].store
-        {
-            sum += 1;
+        for check in wiring {
+            if d.store == check.store {
+                decoded.push(*check);
+                break;
+            }
         }
     }
 
-    sum
+    let res = assemble_decimial(&decoded[..]);
+    println!("{}", res);
+    res
 }
 
 fn read_input() -> Vec<Vec<Digit>> {
     let mut input = String::new();
     std::io::stdin().read_to_string(&mut input).unwrap();
-
     input
         .trim()
         .split('\n')
@@ -91,6 +94,53 @@ fn resolve_wiring(digits: Vec<Digit>) -> [Digit; 10] {
         })
         .collect::<Vec<()>>();
 
+    let a = resolved[7].xor(&resolved[1]);
+    let four = resolved[4];
+    // 9
+    if let Some(d) = digits.iter().find(|d| d.len == 6 && d.contains(&four)) {
+        resolved[9] = *d;
+    }
+
+    // 0
+    let one = resolved[1];
+    if let Some(d) = digits
+        .iter()
+        .find(|d| d.len == 6 && !d.contains(&four) && d.contains(&one))
+    {
+        resolved[0] = *d;
+    }
+
+    // d
+    let d = resolved[0].xor(&resolved[8]);
+    // g
+    let g = resolved[9].xor(&four).xor(&a);
+
+    // b
+    let b = resolved[4].xor(&d).xor(&one);
+
+    // 3
+    resolved[3] = one.or(&a).or(&d).or(&g);
+
+    // 2
+    if let Some(d) = digits
+        .iter()
+        .find(|d| d.len == 5 && !d.contains(&b) && !d.contains(&one))
+    {
+        resolved[2] = *d;
+    }
+
+    // c
+    let c = resolved[1].and(&resolved[2]);
+
+    // e
+    let e = resolved[2].xor(&a).xor(&c).xor(&d).xor(&g);
+
+    // 5
+    resolved[5] = resolved[8].xor(&c).xor(&e);
+    // 6
+    resolved[6] = resolved[8].xor(&c);
+
+    // assign the labels
     for (i, val) in resolved.iter_mut().enumerate() {
         val.label = i as u8;
     }
@@ -98,10 +148,14 @@ fn resolve_wiring(digits: Vec<Digit>) -> [Digit; 10] {
     resolved
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-struct Number {
-    label: u8,
-    digits: [Digit; 7],
+fn assemble_decimial(digits: &[Digit]) -> u64 {
+    let mut num = 0;
+    for (i, d) in digits.iter().rev().enumerate() {
+        let val = d.label as u64;
+        num += val * 10u64.pow(i as u32);
+    }
+
+    num
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -159,7 +213,17 @@ impl Digit {
         }
     }
 
+    fn xor(&self, other: &Digit) -> Digit {
+        let new_val = self.store ^ other.store;
+        let len = new_val.count_ones();
+        Digit {
+            label: 0,
+            len,
+            store: new_val,
+        }
+    }
+
     fn contains(&self, other: &Digit) -> bool {
-        self.store & other.store == self.store
+        (self.store & other.store) == other.store
     }
 }
