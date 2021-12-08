@@ -12,6 +12,7 @@ fn main() {
         school_of_fish.age();
     }
 
+    dbg!(&school_of_fish);
     println!("{}", school_of_fish.count());
 }
 
