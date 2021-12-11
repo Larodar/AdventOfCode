@@ -1,11 +1,13 @@
+//#![feature(portable_simd)]
+
 use std::io::BufRead;
+//use std::simd::u8x32;
 
 fn main() {
     let field = read_std_in();
-    let mins = search_mins(&field);
-    dbg!(&mins);
-    let result: u64 = mins.into_iter().map(|p| (p.2 + 1) as u64).sum();
-    println!("{}", result);
+    //let mins = search_mins(&field);
+    //let result: u64 = mins.into_iter().map(|p| (p.2 + 1) as u64).sum();
+    //println!("{}", result);
 }
 
 fn read_std_in() -> Field {
@@ -44,6 +46,8 @@ fn is_local_min(f: &Field, x: usize, y: usize) -> bool {
         .is_none()
 }
 
+fn find_basins(f: &mut Field) {}
+
 #[derive(Debug, Default)]
 struct Field {
     area: Vec<Vec<u8>>,
@@ -71,6 +75,15 @@ impl Field {
             Some(self.area[x][y])
         }
     }
+
+    //pub fn flatten(&mut self) {
+    //    let mask = u8x32::splat(9);
+    //    for line in self.area.iter_mut() {
+    //        for chunk in line.chunks_mut(32) {
+    //            let vector = u8x32::from_array(chunk.);
+    //        }
+    //    }
+    //}
 }
 
 impl From<Vec<Vec<u8>>> for Field {
@@ -85,44 +98,32 @@ fn generate_surrounding_points(f: &Field, x: usize, y: usize) -> Vec<(usize, usi
         (0, 0) => {
             points.push((0, 1));
             points.push((1, 0));
-            points.push((1, 1));
         }
         (0, vy) => {
             if vy < f.width {
-                points.push((1, vy + 1));
                 points.push((0, vy + 1));
             }
             points.push((0, vy - 1));
-            points.push((1, vy - 1));
             points.push((1, vy));
         }
         (vx, 0) => {
             if vx < f.length {
                 points.push((vx + 1, 0));
-                points.push((vx + 1, 1));
             }
             points.push((vx - 1, 0));
-            points.push((vx - 1, 1));
             points.push((vx, 1));
         }
         (vx, vy) => {
             if vx == f.length && vy == f.width {
-                points.push((vx - 1, vy - 1));
                 points.push((vx - 1, vy));
                 points.push((vx, vy - 1));
             } else {
-                points.push((vx - 1, vy - 1));
                 points.push((vx - 1, vy));
                 points.push((vx, vy - 1));
                 if vx < f.length {
-                    points.push((vx + 1, vy - 1));
                     points.push((vx + 1, vy));
-                    if vy < f.width {
-                        points.push((vx + 1, vy + 1));
-                    }
                 }
                 if vy < f.width {
-                    points.push((vx - 1, vy + 1));
                     points.push((vx, vy + 1));
                 }
             }
@@ -171,49 +172,37 @@ mod tests {
         let field = input.into();
 
         let points = generate_surrounding_points(&field, 0, 0);
-        assert_eq!(points.len(), 3);
+        assert_eq!(points.len(), 2);
         assert!(points.contains(&(0, 1)));
-        assert!(points.contains(&(1, 1)));
         assert!(points.contains(&(1, 0)));
 
         let points = generate_surrounding_points(&field, 0, 3);
-        assert_eq!(points.len(), 5);
+        assert_eq!(points.len(), 3);
         assert!(points.contains(&(0, 4)));
         assert!(points.contains(&(0, 2)));
-        assert!(points.contains(&(1, 2)));
         assert!(points.contains(&(1, 3)));
-        assert!(points.contains(&(1, 4)));
 
         let points = generate_surrounding_points(&field, 2, 0);
-        assert_eq!(points.len(), 5);
+        assert_eq!(points.len(), 3);
         assert!(points.contains(&(1, 0)));
-        assert!(points.contains(&(1, 1)));
         assert!(points.contains(&(2, 1)));
         assert!(points.contains(&(3, 0)));
-        assert!(points.contains(&(3, 1)));
 
         let points = generate_surrounding_points(&field, 1, 1);
-        assert_eq!(points.len(), 8);
-        assert!(points.contains(&(0, 0)));
+        assert_eq!(points.len(), 4);
         assert!(points.contains(&(0, 1)));
-        assert!(points.contains(&(0, 2)));
         assert!(points.contains(&(1, 0)));
         assert!(points.contains(&(1, 2)));
-        assert!(points.contains(&(2, 0)));
         assert!(points.contains(&(2, 1)));
-        assert!(points.contains(&(2, 2)));
 
         let points = generate_surrounding_points(&field, field.length, field.width);
-        assert_eq!(points.len(), 3);
+        assert_eq!(points.len(), 2);
         assert!(points.contains(&(field.length, field.width - 1)));
         assert!(points.contains(&(field.length - 1, field.width)));
-        assert!(points.contains(&(field.length - 1, field.width - 1)));
 
         let points = generate_surrounding_points(&field, field.length, 0);
-        dbg!(&points);
-        assert_eq!(points.len(), 3);
+        assert_eq!(points.len(), 2);
         assert!(points.contains(&(field.length, 1)));
         assert!(points.contains(&(field.length - 1, 0)));
-        assert!(points.contains(&(field.length - 1, 1)));
     }
 }
