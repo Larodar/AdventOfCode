@@ -4,10 +4,25 @@ use std::io::BufRead;
 //use std::simd::u8x32;
 
 fn main() {
-    let field = read_std_in();
-    //let mins = search_mins(&field);
+    let mut field = read_std_in();
+    let mins = search_mins(&field);
     //let result: u64 = mins.into_iter().map(|p| (p.2 + 1) as u64).sum();
-    //println!("{}", result);
+
+    let mut basins = mins
+        .into_iter()
+        .map(|m| {
+            let res = walk_basin(&mut field, m.0, m.1);
+            println!("{}", res);
+            res
+        })
+        .collect::<Vec<_>>();
+    basins.sort_by(|element1, element2| element2.cmp(element1));
+    let result = basins
+        .into_iter()
+        .take(3)
+        .reduce(|size, current| size * current)
+        .unwrap();
+    println!("{}", result);
 }
 
 fn read_std_in() -> Field {
@@ -18,7 +33,7 @@ fn read_std_in() -> Field {
             continue;
         }
 
-        lines.push(l.bytes().map(|b| b - 48).collect());
+        lines.push(l.bytes().map(|b| (b - 48, false)).collect());
     }
 
     lines.into()
@@ -29,7 +44,7 @@ fn search_mins(f: &Field) -> Vec<(usize, usize, u8)> {
     for x in 0..f.area.len() {
         for y in 0..f.area[0].len() {
             if is_local_min(f, x, y) {
-                ret.push((x, y, f.get_value(x, y).unwrap()));
+                ret.push((x, y, f.get_value(x, y).unwrap().0));
             }
         }
     }
@@ -39,24 +54,36 @@ fn search_mins(f: &Field) -> Vec<(usize, usize, u8)> {
 
 fn is_local_min(f: &Field, x: usize, y: usize) -> bool {
     let current = f.get_value(x, y).unwrap();
-    generate_surrounding_points(f, x, y)
-        .into_iter()
-        .map(|(temp_x, temp_y)| (temp_x, temp_y, f.get_value(temp_x, temp_y).unwrap()))
-        .find(|v| v.2 < current)
-        .is_none()
+    current.0 != 9
+        && !generate_surrounding_points(f, x, y)
+            .into_iter()
+            .map(|(temp_x, temp_y)| (temp_x, temp_y, f.get_value(temp_x, temp_y).unwrap()))
+            .any(|v| v.2 < current)
 }
 
-fn find_basins(f: &mut Field) {}
+fn walk_basin(f: &mut Field, x: usize, y: usize) -> u64 {
+    let current = f.get_value(x, y).unwrap();
+    f.mark_point(x, y);
+    if current.1 || current.0 == 9 {
+        return 0;
+    }
+
+    generate_surrounding_points(f, x, y)
+        .into_iter()
+        .map(|p| walk_basin(f, p.0, p.1))
+        .sum::<u64>()
+        + 1
+}
 
 #[derive(Debug, Default)]
 struct Field {
-    area: Vec<Vec<u8>>,
+    area: Vec<Vec<(u8, bool)>>,
     width: usize,
     length: usize,
 }
 
 impl Field {
-    pub fn new(area: Vec<Vec<u8>>) -> Field {
+    pub fn new(area: Vec<Vec<(u8, bool)>>) -> Field {
         let width = area[0].len() - 1;
         let length = area.len() - 1;
         Field {
@@ -66,7 +93,7 @@ impl Field {
         }
     }
 
-    pub fn get_value(&self, x: usize, y: usize) -> Option<u8> {
+    pub fn get_value(&self, x: usize, y: usize) -> Option<(u8, bool)> {
         if x > self.length || y > self.width {
             dbg!(self);
             println!("({}, {})", x, y);
@@ -76,18 +103,23 @@ impl Field {
         }
     }
 
+    pub fn mark_point(&mut self, x: usize, y: usize) {
+        self.area[x][y].1 = true;
+    }
+
     //pub fn flatten(&mut self) {
     //    let mask = u8x32::splat(9);
     //    for line in self.area.iter_mut() {
     //        for chunk in line.chunks_mut(32) {
-    //            let vector = u8x32::from_array(chunk.);
+    //            let mut vector = u8x32::from_slice(chunk);
+    //            vector = vector & mask;
     //        }
     //    }
     //}
 }
 
-impl From<Vec<Vec<u8>>> for Field {
-    fn from(v: Vec<Vec<u8>>) -> Self {
+impl From<Vec<Vec<(u8, bool)>>> for Field {
+    fn from(v: Vec<Vec<(u8, bool)>>) -> Self {
         Field::new(v)
     }
 }
@@ -147,7 +179,11 @@ mod tests {
             "9899965678",
         ]
         .into_iter()
-        .map(|s| s.bytes().map(|b| b - 48).collect::<Vec<u8>>())
+        .map(|s| {
+            s.bytes()
+                .map(|b| (b - 48, false))
+                .collect::<Vec<(u8, bool)>>()
+        })
         .collect::<Vec<_>>();
         let field = input.into();
 
@@ -167,7 +203,11 @@ mod tests {
             "9899965678",
         ]
         .into_iter()
-        .map(|s| s.bytes().map(|b| b - 48).collect::<Vec<u8>>())
+        .map(|s| {
+            s.bytes()
+                .map(|b| (b - 48, false))
+                .collect::<Vec<(u8, bool)>>()
+        })
         .collect::<Vec<_>>();
         let field = input.into();
 
@@ -205,4 +245,7 @@ mod tests {
         assert!(points.contains(&(field.length, 1)));
         assert!(points.contains(&(field.length - 1, 0)));
     }
+
+    #[test]
+    fn walk_basin() {}
 }
