@@ -6,20 +6,57 @@ fn main() {
         .lines()
         .map(|l| l.unwrap())
         .collect::<Vec<_>>();
-    let (_chunks, score) = read_data_set(&std_in[..]);
-    println!("{}", score);
-}
+    let (chunks, _) = read_data_set(&std_in[..]);
 
-fn read_data_set<T: AsRef<str>>(input: &[T]) -> (Vec<Chunk>, u64) {
-    let mut error_score = 0;
-    let mut chunks = vec![];
-    for line in input {
-        let (c, score) = read_chunks(line.as_ref());
-        c.into_iter().for_each(|el| chunks.push(el));
-        error_score += score;
+    let mut scores = vec![];
+    for line in chunks {
+        let incomplete = line.iter().filter(|c| !c.complete).collect::<Vec<_>>();
+        for c in incomplete {
+            let completion = c.get_completion_string();
+            let mut score = 0;
+            for ch in completion.chars() {
+                score *= 5;
+                score += get_char_completion_score(ch);
+            }
+
+            scores.push(score);
+        }
     }
 
-    (chunks, error_score)
+    scores.sort();
+    println!("{}", scores.len());
+    let middle = scores.len() / 2;
+    println!("{}", middle);
+
+    println!("{}", scores[middle]);
+}
+
+fn read_data_set<T: AsRef<str>>(input: &[T]) -> (Vec<Vec<Chunk>>, u64) {
+    let mut chunks = vec![];
+    //let mut error_score = 0;
+    for line in input {
+        match read_chunks(line.as_ref()) {
+            Ok((c, _)) => {
+                chunks.push(c);
+            }
+            Err(_) => {
+                // filter out
+                continue;
+            }
+        }
+    }
+
+    (chunks, 0)
+}
+
+fn get_char_completion_score(c: char) -> u64 {
+    match c {
+        ')' => 1,
+        ']' => 2,
+        '}' => 3,
+        '>' => 4,
+        _ => panic!("bad char"),
+    }
 }
 
 fn get_char_score(c: char) -> u64 {
@@ -32,7 +69,7 @@ fn get_char_score(c: char) -> u64 {
     }
 }
 
-fn read_chunks(input: &str) -> (Vec<Chunk>, u64) {
+fn read_chunks(input: &str) -> ParseChunkResult<(Vec<Chunk>, u64)> {
     let mut remainder = input;
     let mut chunks = vec![];
     let mut error_score = 0;
@@ -44,26 +81,17 @@ fn read_chunks(input: &str) -> (Vec<Chunk>, u64) {
             '<' => ChunkKind::Angles,
             c => {
                 error_score += get_char_score(c);
-                remainder = &remainder[1..];
                 continue;
             }
         };
-        match Chunk::parse(remainder, kind) {
-            Ok((chunk, rest)) => {
-                chunks.push(chunk);
-                remainder = rest;
-            }
-            Err(ParseChunkError(ParseChunkErrorKind::Incomplete)) => {
-                remainder = "";
-            }
-            Err(ParseChunkError(ParseChunkErrorKind::Corrupt(c))) => {
-                error_score += get_char_score(c);
-                remainder = "";
-            }
-        }
+
+        remainder = &remainder[1..];
+        let (chunk, rest) = Chunk::parse(remainder, kind)?;
+        chunks.push(chunk);
+        remainder = rest;
     }
 
-    (chunks, error_score)
+    Ok((chunks, error_score))
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -89,56 +117,91 @@ impl ChunkKind {
 struct Chunk {
     kind: ChunkKind,
     kids: Option<Vec<Chunk>>,
+    complete: bool,
 }
 
 impl Chunk {
-    pub fn parse(input: &str, kind: ChunkKind) -> ParseChunkResult {
+    pub fn parse(input: &str, kind: ChunkKind) -> ParseChunkResult<(Chunk, &str)> {
         if input.is_empty() {
-            return Err(ParseChunkError(ParseChunkErrorKind::Incomplete));
+            return Ok((
+                Chunk {
+                    kind,
+                    kids: None,
+                    complete: false,
+                },
+                "",
+            ));
         }
 
         let mut remainder = input;
         let mut kids = vec![];
 
+        let mut self_complete = false;
         loop {
             if remainder.is_empty() {
                 break;
             }
 
-            let child_kind = match remainder.chars().next().unwrap() {
-                '(' => Some(ChunkKind::Parenthesis),
-                '{' => Some(ChunkKind::Braces),
-                '[' => Some(ChunkKind::Brackets),
-                '<' => Some(ChunkKind::Angles),
+            let kind = match remainder.chars().next().unwrap() {
+                '(' => ChunkKind::Parenthesis,
+                '{' => ChunkKind::Braces,
+                '[' => ChunkKind::Brackets,
+                '<' => ChunkKind::Angles,
                 c => {
                     if c != kind.get_closing_token() {
                         return Err(ParseChunkError(ParseChunkErrorKind::Corrupt(c)));
                     }
 
+                    self_complete = true;
                     remainder = &remainder[1..];
-                    None
+                    break;
                 }
             };
 
-            if let Some(kind) = child_kind {
-                let (child, rest) = Chunk::parse(&remainder[1..], kind)?;
-                kids.push(child);
-                remainder = rest;
-            } else {
-                break;
-            }
+            let (child, rest) = Chunk::parse(&remainder[1..], kind)?;
+            kids.push(child);
+            remainder = rest;
         }
 
+        let complete = self_complete && kids.iter().all(|k| k.complete);
         let ret = Chunk {
             kind,
             kids: if kids.is_empty() { None } else { Some(kids) },
+            complete,
         };
 
         Ok((ret, remainder))
     }
+
+    pub fn get_completion_string(&self) -> String {
+        let mut ret = match &self.kids {
+            Some(k) => {
+                let incomplete = k.iter().filter(|kid| !kid.complete).collect::<Vec<_>>();
+                if incomplete.len() > 1 {
+                    panic!("More than one incomplete chunk?");
+                }
+                if incomplete.is_empty() {
+                    String::new()
+                } else {
+                    incomplete[0].get_completion_string()
+                }
+            }
+            None => String::new(),
+        };
+
+        let c = match self.kind {
+            ChunkKind::Angles => '>',
+            ChunkKind::Parenthesis => ')',
+            ChunkKind::Braces => '}',
+            ChunkKind::Brackets => ']',
+        };
+
+        ret.push(c);
+        ret
+    }
 }
 
-type ParseChunkResult<'a> = Result<(Chunk, &'a str), ParseChunkError>;
+type ParseChunkResult<T> = Result<T, ParseChunkError>;
 
 #[derive(Debug, PartialEq)]
 struct ParseChunkError(ParseChunkErrorKind);
@@ -184,7 +247,50 @@ mod tests {
             "<{([{{}}[<[[[<>{}]]]>[]]",
         ];
 
-        let (_, score) = read_data_set(&input[..]);
-        assert_eq!(score, 26397);
+        let (chunks, score) = read_data_set(&input[..]);
+        let completion = chunks
+            .into_iter()
+            .map(|c| c.iter().all(|c| c.complete))
+            .collect::<Vec<_>>();
+
+        assert_eq!(completion, vec![false, false, false, false, false,])
+        //assert_eq!(score, 26397);
+    }
+
+    #[test]
+    fn completion() {
+        let input = vec![
+            "[({(<(())[]>[[{[]{<()<>>",
+            "[(()[<>])]({[<{<<[]>>(",
+            "(((({<>}<{<{<>}{[]{[]{}",
+            "{<[[]]>}<{[{[{[]{()[[[]",
+            "<{([{{}}[<[[[<>{}]]]>[]]",
+        ];
+
+        let (chunks, _) = read_data_set(&input[..]);
+        let mut scores = vec![];
+        for line in chunks {
+            let incomplete = line.iter().filter(|c| !c.complete).collect::<Vec<_>>();
+            for c in incomplete {
+                dbg!(c);
+                let completion = c.get_completion_string();
+                println!("{}", completion);
+                let mut score = 0;
+                for ch in completion.chars() {
+                    score *= 5;
+                    score += get_char_completion_score(ch);
+                }
+
+                scores.push(score);
+            }
+        }
+
+        assert_eq!(scores.len(), 5);
+        dbg!(&scores);
+        assert!(scores.contains(&288957));
+        assert!(scores.contains(&5566));
+        assert!(scores.contains(&1480781));
+        assert!(scores.contains(&995444));
+        assert!(scores.contains(&294));
     }
 }
