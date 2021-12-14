@@ -24,9 +24,7 @@ fn main() {
     }
 
     scores.sort();
-    println!("{}", scores.len());
     let middle = scores.len() / 2;
-    println!("{}", middle);
 
     println!("{}", scores[middle]);
 }
