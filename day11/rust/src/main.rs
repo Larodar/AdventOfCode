@@ -8,6 +8,16 @@ use std::simd::u8x32;
 fn main() {
     let mut grid = read_input();
     grid.increase_energy();
+    let mut total_flashes = 0;
+    loop {
+        let flashes = grid.deplete_energy();
+        total_flashes += grid.deplete_energy();
+        if flashes > 0 {
+            continue;
+        }
+
+        // handle flashed
+    }
 }
 
 fn read_input() -> Grid {
@@ -59,7 +69,6 @@ impl Grid {
     }
 
     pub fn increase_energy(&mut self) {
-        dbg!(&self.entries);
         let plus_one = u8x32::splat(1);
         let mut chunk_iter = self.entries.chunks_exact_mut(32);
         while let Some(chunk) = chunk_iter.next() {
@@ -75,6 +84,7 @@ impl Grid {
 
     pub fn deplete_energy(&mut self) -> u64 {
         let nine = u8x32::splat(9);
+<<<<<<< HEAD
         let mut chunk_iter = self.entries.chunks_exact_mut(32);
         let mut flashed_iter = self.flashed.chunks_exact_mut(32);
         let mut flashes = 0;
@@ -97,22 +107,48 @@ impl Grid {
                     let surrounding = generate_surrounding_points(self.side_length, x, y);
                     for (px, py) in surrounding.into_iter() {
                         self.inc(px, py);
+=======
+        let mut chunk_iter = self.entries.chunks_exact(32);
+        let mut chunk_cnt = 0;
+        let side_length = self.side_length;
+        let mut flash_cnt = 0;
+
+        while let Some(chunk) = chunk_iter.next() {
+            let flashed_mask = u8x32::from_slice(chunk).lanes_gt(nine);
+            let offset = chunk_cnt * 32;
+            for i in 0..32 {
+                let index = offset + i;
+                // test the lane and make sure it has not flashed already
+                if flashed_mask.test(i) && !self.flashed[index] {
+                    // flashing
+                    let (x, y) = get_x_y(side_length, index);
+                    let surrounding = generate_surrounding_points(side_length, x, y);
+                    for s in surrounding {
+                        self.inc(s.0, s.1);
+>>>>>>> 5bf67e0276018b5a6248074c87254aa7c122e263
                     }
-                    // get surrounding for l.0
-                    // inc
-                    // get surrounding
                 }
             }
 
-            chunk_cnt += 1;
+            self.flashed[chunk_cnt..chunk_cnt * 32].copy_from_slice(&flashed_mask.to_array()[..]);
         }
 
-        // take care of the rest
-        for b in chunk_iter.into_remainder() {
-            *b += 1;
-        }
+        flash_cnt as u64
+    }
 
-        flashes
+    pub fn calm_down(&mut self) {
+        let mut zero = u8x32::splat(0);
+        let mut chunk_iter = self.entries.chunks_exact_mut(32);
+        let mut flashed_iter = self.flashed.chunks_exact(32);
+        while let Some(chunk) = chunk_iter.next() {
+            let flashed_chunk = flashed_iter.next().unwrap();
+            let chunk_vec = u8x32::from_slice(chunk);
+        }
+    }
+
+    pub fn inc(&mut self, x: usize, y: usize) {
+        let index = (y * self.side_length) + x;
+        self.entries[index] += 1;
     }
 
     pub fn inc(&mut self, x: usize, y: usize) {
@@ -194,4 +230,45 @@ fn generate_surrounding_points(side_length: usize, x: usize, y: usize) -> Vec<(u
     }
 
     points
+}
+
+fn get_x_y(side_length: usize, index: usize) -> (usize, usize) {
+    let x = index % side_length;
+    let y = index / side_length;
+    (x, y)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn coordinate_conversion() {
+        assert_eq!(get_x_y(10, 0), (0, 0));
+        assert_eq!(get_x_y(10, 10), (0, 1));
+        assert_eq!(get_x_y(10, 24), (4, 2));
+        assert_eq!(get_x_y(10, 39), (9, 3));
+    }
+
+    #[test]
+    fn deplete_once() {
+        let mut backing = vec![];
+        backing.resize_with(100, || 0);
+        backing[11] = 10;
+        let mut grid = Grid::new(backing, 10);
+        let result = grid.deplete_energy();
+        assert_eq!(result, 1);
+        assert_eq!(grid.entries[0], 1);
+        assert_eq!(grid.entries[1], 1);
+        assert_eq!(grid.entries[2], 1);
+        assert_eq!(grid.entries[3], 0);
+        assert_eq!(grid.entries[10], 1);
+        assert_eq!(grid.entries[11], 10);
+        assert_eq!(grid.entries[12], 1);
+        assert_eq!(grid.entries[13], 0);
+        assert_eq!(grid.entries[20], 1);
+        assert_eq!(grid.entries[21], 1);
+        assert_eq!(grid.entries[22], 1);
+        assert_eq!(grid.entries[23], 0);
+    }
 }
