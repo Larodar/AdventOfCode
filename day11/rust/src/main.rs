@@ -1,6 +1,7 @@
 #![feature(portable_simd)]
 
 use std::io::BufRead;
+use std::ops::BitAnd;
 use std::simd::mask8x32;
 use std::simd::u8x32;
 
@@ -75,22 +76,27 @@ impl Grid {
     pub fn deplete_energy(&mut self) -> u64 {
         let nine = u8x32::splat(9);
         let mut chunk_iter = self.entries.chunks_exact_mut(32);
+        let mut flashed_iter = self.flashed.chunks_exact_mut(32);
         let mut flashes = 0;
         let mut chunk_cnt = 0;
         while let Some(chunk) = chunk_iter.next() {
-            let res = u8x32::from_slice(chunk).lanes_gt(nine);
+            let flashed_chunk = flashed_iter.next().unwrap();
+            let flashed_vec = mask8x32::from_slice(flashed_chunk);
+            let res = u8x32::from_slice(chunk).lanes_gt(nine).bitxor(flashed_vec);
             if res.any() {
                 // flash
-                for l in res
-                    .to_array()
-                    .into_iter()
-                    .enumerate()
-                    .filter(|(i, set)| set)
-                {
-                    let flashed = self.flashed[chunk_cnt * l.0];
-                    if !flashed {
-                        let surrounding = generate_surrounding_points(self.side_length, x, y)
+                for l in res.to_array().into_iter().enumerate() {
+                    if !l.1 {
+                        continue;
+                    }
 
+                    let index = chunk_cnt * 32 + l.0;
+
+                    let x = index % self.side_length;
+                    let y = index / self.side_length;
+                    let surrounding = generate_surrounding_points(self.side_length, x, y);
+                    for (px, py) in surrounding.into_iter() {
+                        self.inc(px, py);
                     }
                     // get surrounding for l.0
                     // inc
@@ -107,6 +113,11 @@ impl Grid {
         }
 
         flashes
+    }
+
+    pub fn inc(&mut self, x: usize, y: usize) {
+        let index = y * self.side_length + x;
+        self.entries[index] += 1;
     }
 
     pub fn get_nth_row<'a>(&'a self, n: usize) -> impl Iterator + 'a {
