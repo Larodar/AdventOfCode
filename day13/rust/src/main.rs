@@ -6,8 +6,16 @@ use std::iter::Take;
 use std::num::ParseIntError;
 use std::ops::Add;
 use std::str::FromStr;
+
 fn main() {
-    let (grid, folds) = read_input();
+    let (mut grid, folds) = read_input();
+    for fold in folds {
+        grid = grid.fold_at(fold);
+        let mut cnt = grid.get_points_gt(0).collect::<Vec<_>>();
+        cnt.dedup();
+    }
+
+    println!("{}", grid);
 }
 
 fn read_input() -> (Grid, Vec<Fold>) {
@@ -39,6 +47,7 @@ impl FromStr for Fold {
     }
 }
 
+#[derive(Debug)]
 struct Grid {
     backing: Vec<u8>,
     width: usize,
@@ -46,7 +55,24 @@ struct Grid {
 }
 
 impl Grid {
-    fn from_lines<'a>(lines: &mut impl Iterator<Item = std::io::Result<String>>) -> Grid {
+    fn fold_at(self, f: Fold) -> Grid {
+        let new_points = match f {
+            Fold::Horizontal(y) => project_vertical(self.get_points_gt(0), y).collect::<Vec<_>>(),
+            Fold::Vertical(x) => project_horizontal(self.get_points_gt(0), x).collect::<Vec<_>>(),
+        };
+
+        Grid::from_coordinates(new_points)
+    }
+
+    fn get_points_gt(&self, other: u8) -> impl Iterator<Item = Point<usize>> + '_ {
+        self.backing
+            .iter()
+            .enumerate()
+            .filter(move |(_, b)| **b > other)
+            .map(|(i, _)| self.index_to_point(i))
+    }
+
+    fn from_lines(lines: &mut impl Iterator<Item = std::io::Result<String>>) -> Grid {
         let coords = lines
             .map(|r| r.unwrap())
             .take_while(|l| !l.is_empty())
@@ -56,18 +82,32 @@ impl Grid {
         Grid::from_coordinates(coords)
     }
 
+    fn index_to_point(&self, index: usize) -> Point<usize> {
+        let y = index / self.width;
+        let x = index % self.width;
+        Point::<_>(x, y)
+    }
+
     fn from_coordinates(coordinates: Vec<Point<usize>>) -> Grid {
         let (x_max, y_max) = coordinates.iter().fold((0, 0), |temp, current| {
             (temp.0.max(current.0), temp.1.max(current.1))
         });
+        let width = x_max + 1;
+        let length = y_max + 1;
+
         let mut backing = vec![];
-        backing.resize(x_max * y_max, 0);
-        // write coordinates into vec
-        Grid {
+        backing.resize(width * length, 0);
+        let mut g = Grid {
             backing,
-            width: x_max,
-            length: y_max,
+            width,
+            length,
+        };
+
+        for p in coordinates {
+            g.set_xy(p.0, p.1, 1);
         }
+
+        g
     }
 
     fn get_surrounding_sparse(&self, x: usize, y: usize) -> Vec<(usize, usize)> {
@@ -145,7 +185,7 @@ impl Grid {
     /// x - horizontal
     /// y - vertical
     fn set_xy(&mut self, x: usize, y: usize, val: u8) {
-        self.backing[y * self.length + x] = val;
+        self.backing[y * self.width + x] = val;
     }
 
     fn iter_nth_row(&self, n: usize) -> Take<Skip<std::slice::Iter<'_, u8>>> {
@@ -157,6 +197,61 @@ impl Grid {
         let offset = n;
         self.backing.iter().skip(offset).step_by(self.length)
     }
+}
+
+impl Display for Grid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for chunk in self.backing.chunks(self.width) {
+            for (i, b) in chunk.iter().enumerate() {
+                if i != 0 {
+                    write!(f, " ")?;
+                }
+
+                write!(f, "{}", b)?;
+            }
+            writeln!(f)?;
+        }
+
+        Ok(())
+    }
+}
+
+fn project_vertical<'a, T: Iterator<Item = Point<usize>> + 'a>(
+    points: T,
+    f: usize,
+) -> impl Iterator<Item = Point<usize>> + 'a {
+    points.map(move |p| {
+        if p.1 > f {
+            let diff = p.1 - f;
+            if diff > 0 {
+                let new_y = f - diff;
+                Point(p.0, new_y)
+            } else {
+                p
+            }
+        } else {
+            p
+        }
+    })
+}
+
+fn project_horizontal<'a, T: Iterator<Item = Point<usize>> + 'a>(
+    points: T,
+    f: usize,
+) -> impl Iterator<Item = Point<usize>> + 'a {
+    points.map(move |p| {
+        if p.0 > f {
+            let diff = p.0 - f;
+            if diff > 0 {
+                let new_x = f - diff;
+                Point(new_x, p.1)
+            } else {
+                p
+            }
+        } else {
+            p
+        }
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -198,5 +293,60 @@ impl Display for ParsePointError {
             Some(s) => writeln!(f, "Could not parse point: {}", s),
             None => writeln!(f, "Could not parse point."),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let input = vec![
+            Ok("6,10".to_string()),
+            Ok("0,14".to_string()),
+            Ok("9,10".to_string()),
+            Ok("0,3".to_string()),
+            Ok("10,4".to_string()),
+            Ok("4,11".to_string()),
+            Ok("6,0".to_string()),
+            Ok("6,12".to_string()),
+            Ok("4,1".to_string()),
+            Ok("0,13".to_string()),
+            Ok("10,12".to_string()),
+            Ok("3,4".to_string()),
+            Ok("3,0".to_string()),
+            Ok("8,4".to_string()),
+            Ok("1,10".to_string()),
+            Ok("2,14".to_string()),
+            Ok("8,10".to_string()),
+            Ok("9,0".to_string()),
+            Ok("".to_string()),
+            Ok("fold along y=7".to_string()),
+            Ok("fold along x=5".to_string()),
+        ];
+
+        let mut lines = input.into_iter();
+
+        let grid = Grid::from_lines(&mut lines);
+        assert_eq!(grid.width, 11);
+        assert_eq!(grid.length, 15);
+        let folds: Vec<Fold> = lines.map(|s| s.unwrap().parse().unwrap()).collect();
+        let mut folds_iter = folds.into_iter();
+
+        let grid = grid.fold_at(folds_iter.next().unwrap());
+
+        println!("{}", &grid);
+        let mut cnt = grid.get_points_gt(0).collect::<Vec<_>>();
+        cnt.dedup();
+
+        assert_eq!(cnt.len(), 17);
+
+        let grid = grid.fold_at(folds_iter.next().unwrap());
+
+        let mut cnt = grid.get_points_gt(0).collect::<Vec<_>>();
+        cnt.dedup();
+
+        assert_eq!(cnt.len(), 16);
     }
 }
