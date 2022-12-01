@@ -1,18 +1,22 @@
 use std::io::Read;
 
 fn main() {
-    let input = read_input();
+    //let input = read_input();
     let mut school_of_fish = SoF::new();
 
-    for b in input {
-        school_of_fish.add_fish(b);
-    }
+//     for b in input {
+//         school_of_fish.add_fish(b);
+//     }
 
+    school_of_fish.add_fish(3);
+    school_of_fish.add_fish(4);
+    school_of_fish.add_fish(3);
+    school_of_fish.add_fish(1);
+    school_of_fish.add_fish(2);
     for _ in 0..256 {
         school_of_fish.age();
     }
 
-    dbg!(&school_of_fish);
     println!("{}", school_of_fish.count());
 }
 
