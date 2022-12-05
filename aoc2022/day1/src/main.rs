@@ -20,10 +20,10 @@ fn main() {
 }
 
 fn find_low(arr: &[u64; 3]) -> Option<(usize, u64)> {
-    let mut current = u64::MAX;
+    let mut current = arr[0];
     let mut current_idx = None;
 
-    for i in 0..arr.len() {
+    for i in 1..arr.len() {
         let val = arr[i];
         if val < current {
             current = val;
