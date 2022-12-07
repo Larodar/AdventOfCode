@@ -134,8 +134,9 @@ mod tests {
 5-7,7-9
 2-8,3-7
 6-6,4-6
-2-6,4-8"
+2-6,4-8
+3-4,2-3"
             .to_vec();
-        assert_eq!(4, p2(input.into_iter()));
+        assert_eq!(5, p2(input.into_iter()));
     }
 }
