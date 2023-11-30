@@ -1,9 +1,7 @@
 use std::{
     io::{stdin, Read},
-    sync::atomic::{AtomicUsize, Ordering::SeqCst},
+    str::Lines,
 };
-
-static CTR: AtomicUsize = AtomicUsize::new(0);
 
 fn main() {
     let mut buf = String::new();
@@ -22,6 +20,7 @@ fn main() {
 }
 
 fn p1(input: &str) -> u64 {
+    let fs = FsEntry::from_lines(&input.lines().collect::<Vec<_>>()[..], "root".to_owned());
     0
 }
 
@@ -52,17 +51,42 @@ impl FsEntry {
         ret
     }
 
+    fn from_lines_new<I: Iterator<Item = String>>(lines: &mut I) -> FsEntry {
+        return FsEntry::from_lines_new_inner(lines, "/".to_owned());
+    }
+
+    fn from_lines_new_inner<I: Iterator<Item = String>>(lines: &mut I, name: String) -> FsEntry {
+        let mut fs = FsEntry::with_name("/".to_owned());
+        loop {
+            match lines.next() {
+                Some(line) => {
+                    if line.starts_with("$ ls") {}
+                    if line.starts_with("$ cd") {
+                        let name = &line[4..];
+                        let entry =  FsEntry::from_lines_new_inner(lines, name.to_owned());
+                        if fs.as_ref().kids.is_none() {
+                            fs.kids = Some(vec![entry]);
+                        } else {
+                            fs.kids.unwrap().push(entry);
+                        }
+                    }
+                }
+                None => {
+                    return fs;
+                }
+            }
+        }
+    }
+
     fn from_lines<'a>(mut lines: &'a [&'a str], name: String) -> (&'a [&'a str], Option<FsEntry>) {
         eprintln!("{}", name);
-        // if CTR.load(SeqCst) > 10 {
-        //     panic!();
-        // }
-        // CTR.fetch_add(1, SeqCst);
         let mut kids = vec![];
         loop {
             if lines.len() == 0 {
                 break;
-            } else if lines[0].starts_with("$ ls") {
+            }
+
+            if lines[0].starts_with("$ ls") {
                 let mut i = 1;
                 while i < lines.len() && !lines[i].starts_with("$") {
                     let mut parts = lines[i].split(' ');
@@ -123,7 +147,7 @@ fn parse_cd(line: &str) -> CdAction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum CdAction {
     Back,
     Root,
@@ -182,6 +206,22 @@ fn parse_fs_tree(input: &str) -> FsEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_cd() {
+        let input = "$ cd /";
+        assert_eq!(CdAction::Root, parse_cd(input));
+
+        let input = "$ cd ..";
+        assert_eq!(CdAction::Back, parse_cd(input));
+
+        let input = "$ cd a";
+        assert_eq!(CdAction::Into("a".to_owned()), parse_cd(input));
+
+        let input = "$ cd ab";
+        assert_eq!(CdAction::Into("ab".to_owned()), parse_cd(input));
+    }
+
     #[test]
     fn p1_test() {
         let input = "$ cd /
