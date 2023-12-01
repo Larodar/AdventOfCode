@@ -1,5 +1,5 @@
 use std::{
-    io::{stdin, Read},
+    io::{stdin, Read, BufRead},
 };
 
 fn main() {
@@ -7,26 +7,24 @@ fn main() {
     _ = stdin().read_to_string(&mut buf).unwrap();
 
     match std::env::args()
-        .into_iter()
-        .skip(1)
-        .next()
+        .nth(1)
         .map(|s| s.parse::<u32>().unwrap())
     {
-        Some(1) => println!("{}", p1(&buf[..])),
-        Some(2) => println!("{}", p2(&buf[..])),
+            Some(1) => println!("{}", p1(stdin().lock().lines().map(|line_result| line_result.unwrap()))),
+        Some(2) => println!("{}", p2(stdin().lock().lines().map(|line_result| line_result.unwrap()))),
         _ => panic!("specify the part of the solution to run (1/2)"),
     }
 }
 
-fn p1(input: &str) -> u64 {
+fn p1(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
     let mut total = 0u64;
-    for l in input.lines() {
-        let bytes = l.as_bytes();
-        let first = bytes.iter().find(|&&b| b >= 0x30 && b < 0x40).unwrap();
+    for l in input {
+        let bytes = l.as_ref().as_bytes();
+        let first = bytes.iter().find(|&&b| (0x30..0x40).contains(&b)).unwrap();
         let last = bytes
             .iter()
             .rev()
-            .find(|&&b| b >= 0x30 && b < 0x40)
+            .find(|&&b| (0x30..0x40).contains(&b))
             .unwrap();
         let buf = [*first, *last];
         let string = std::str::from_utf8(&buf[..]).unwrap();
@@ -37,10 +35,10 @@ fn p1(input: &str) -> u64 {
     total
 }
 
-fn p2(input: &str) -> u64 {
+fn p2(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
     let mut total = 0u64;
-    for l in input.lines() {
-        let bytes = l.as_bytes();
+    for l in input {
+        let bytes = l.as_ref().as_bytes();
         let (first, mut remainder) = find_digit(bytes);
         let mut last = first;
         loop {
@@ -66,7 +64,7 @@ fn find_digit(bytes: &[u8]) -> (u8, &[u8]) {
     let len = bytes.len();
     for i in 0..len {
         let b = bytes[i];
-        if b > 0x30 && b < 0x40 {
+        if (0x30..0x40).contains(&b) {
             return (b, &bytes[i+1..]);
         }
 
