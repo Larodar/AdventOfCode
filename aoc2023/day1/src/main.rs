@@ -70,48 +70,48 @@ fn find_digit(bytes: &[u8]) -> (u8, &[u8]) {
             return (b, &bytes[i+1..]);
         }
 
-        match b.try_into() {
-            Ok(FirstLetter::O) if len - i > 2
+        match b {
+            0x6F if len - i > 2         // o
                 && bytes[i + 1] == 0x6E // n
                 && bytes[i + 2] == 0x65 // e
                 => return (0x31, &bytes[i + 2..]), 
-            Ok(FirstLetter::T) if len - i > 2
+            0x74 if len - i > 2         // t
                 && bytes[i + 1] == 0x77 // w
                 && bytes[i + 2] == 0x6F // o
                 => return (0x32, &bytes[i + 2..]), 
-            Ok(FirstLetter::T) if len - i > 4
+            0x74 if len - i > 4         // t
                 && bytes[i + 1] == 0x68 // h
                 && bytes[i + 2] == 0x72 // r
                 && bytes[i + 3] == 0x65 // e
                 && bytes[i + 4] == 0x65 // e
                 => return (0x33, &bytes[i+4..]), 
-            Ok(FirstLetter::F) if len - i > 3
+            0x66 if len - i > 3         // f
                 && bytes[i + 1] == 0x6F // o
                 && bytes[i + 2] == 0x75 // u
                 && bytes[i + 3] == 0x72 // r
                 => return (0x34, &bytes[i+3..]),
-            Ok(FirstLetter::F) if len - i > 3
+            0x66 if len - i > 3         // f
                 && bytes[i + 1] == 0x69 // i
                 && bytes[i + 2] == 0x76 // v
                 && bytes[i + 3] == 0x65 // e
                 => return (0x35, &bytes[i+3..]),
-            Ok(FirstLetter::S) if len - i > 2
+            0x73 if len - i > 2         // s
                 && bytes[i + 1] == 0x69 // i
                 && bytes[i + 2] == 0x78 // x
                 => return (0x36, &bytes[i+2..]),
-            Ok(FirstLetter::S) if len - i > 4
+            0x73 if len - i > 4         // s
                 && bytes[i + 1] == 0x65 // e
                 && bytes[i + 2] == 0x76 // v
                 && bytes[i + 3] == 0x65 // e
                 && bytes[i + 4] == 0x6E // n
                 => return (0x37, &bytes[i+4..]),
-            Ok(FirstLetter::E) if len -i > 4
+            0x65 if len -i > 4          // e
                 && bytes[i + 1] == 0x69 // i
                 && bytes[i + 2] == 0x67 // g
                 && bytes[i + 3] == 0x68 // h
                 && bytes[i + 4] == 0x74 // t
                 => return (0x38, &bytes[i+4..]),
-            Ok(FirstLetter::N) if len - i > 3
+            0x6E if len - i > 3         // n
                 && bytes[i + 1] == 0x69 // i
                 && bytes[i + 2] == 0x6E // n
                 && bytes[i + 3] == 0x65 // e
@@ -121,32 +121,6 @@ fn find_digit(bytes: &[u8]) -> (u8, &[u8]) {
     }
 
     (0, &[])
-}
-
-enum FirstLetter {
-    O,
-    T,
-    F,
-    S,
-    E,
-    N,
-    Z,
-}
-
-impl TryFrom<u8> for FirstLetter {
-    type Error = ();
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0x6F | 0x4F => Ok(FirstLetter::O),
-            0x74 | 0x54 => Ok(FirstLetter::T),
-            0x66 | 0x46 => Ok(FirstLetter::F),
-            0x73 | 0x53 => Ok(FirstLetter::S),
-            0x65 | 0x45 => Ok(FirstLetter::E),
-            0x6E | 0x4E => Ok(FirstLetter::N),
-            0x7A | 0x5A => Ok(FirstLetter::Z),
-            _ => Err(()),
-        }
-    }
 }
 
 #[cfg(test)]
