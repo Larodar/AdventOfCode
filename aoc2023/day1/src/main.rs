@@ -44,7 +44,7 @@ fn p2(input: &str) -> u64 {
         let (first, mut remainder) = find_digit(bytes);
         let mut last = first;
         loop {
-            let (result, rem) = dbg!(find_digit(remainder));
+            let (result, rem) = find_digit(remainder);
             remainder = rem;
             if result != 0 {
                 last = result;
@@ -54,9 +54,8 @@ fn p2(input: &str) -> u64 {
                 break;
             }
         }
-        let buf = dbg!([first, last]);
+        let buf = [first, last];
         let string = std::str::from_utf8(&buf[..]).unwrap();
-
         total += string.parse::<u64>().unwrap();
     }
 
