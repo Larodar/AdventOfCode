@@ -13,3 +13,5 @@ Cargo.lock
 **/dist-*
 
 **/C:/
+**/bin/
+**/obj/
