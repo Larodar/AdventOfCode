@@ -1,5 +1,6 @@
 use std::io::{stdin, BufRead};
 
+    pub const DOT: u8 = 0x2E;
 fn main() {
     match std::env::args().nth(1).map(|s| s.parse::<u32>().unwrap()) {
         Some(1) => println!(
@@ -46,6 +47,87 @@ fn p1(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
 
     total
 }
+
+fn p1_alt(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
+    let mut total = 0;
+    let pad_once = &[DOT];
+
+    let mut mid = input.next().unwrap();
+    let mut bot = input.next().unwrap();
+    let dot_line = std::iter::repeat(&DOT).take(mid.as_ref().as_bytes().len() + 2);
+
+    total += process_lines(
+        &mut dot_line.clone(),
+        &mut pad_once
+            .iter()
+            .chain(mid.as_ref().as_bytes())
+            .chain(pad_once.iter()),
+        &mut pad_once
+            .iter()
+            .chain(bot.as_ref().as_bytes())
+            .chain(pad_once.iter()),
+    );
+
+    loop {
+        let top = mid;
+        mid = bot;
+        let mut bot_iter = if let Some(new) = input.next() {
+            bot = new;
+            pad_once
+                .iter()
+                .chain(bot.as_ref().as_bytes())
+                .chain(pad_once.iter())
+        } else {
+            // do one more iter with padding
+            break;
+        };
+
+        total += process_lines(
+            &mut pad_once
+                .iter()
+                .chain(top.as_ref().as_bytes())
+                .chain(pad_once.iter()),
+            &mut pad_once
+                .iter()
+                .chain(mid.as_ref().as_bytes())
+                .chain(pad_once.iter()),
+            &mut bot_iter,
+        );
+    }
+
+    total
+}
+
+fn process_lines<
+    'a,
+    I1: Iterator<Item = &'a u8>,
+    I3: Iterator<Item = &'a u8>,
+    I2: Iterator<Item = &'a u8>,
+>(
+    top: &mut I1,
+    mid: &mut I2,
+    bot: &mut I3,
+) -> u64 {
+
+    let iter = top.zip(mid.zip(bot)).skip(1);
+
+    //let mut state = ReadState::None;
+    //for slice in iter {
+    //    state = match (state, slice) {
+    //        (ReadState::None,DOT) => ReadState::None
+    //        (ReadState::None,0x30..=0x39) => ReadState::None
+    //        (ReadState::None,DOT) => ReadState::None
+    //         => {}
+
+
+    //    }
+
+    //}
+
+    0
+}
+
+
 
 fn process_line(line: &str, carry: &mut [u8], next_carry: &mut [u8]) -> u64 {
     let mut total = 0;
@@ -138,9 +220,11 @@ fn process_line(line: &str, carry: &mut [u8], next_carry: &mut [u8]) -> u64 {
             // hit a symbol
             let before = i.saturating_sub(1);
             let after = std::cmp::min(i + 1, carry.len());
-            let expr = ((0x30..=0x39).contains(&carry[before]),
+            let expr = (
+                (0x30..=0x39).contains(&carry[before]),
                 (0x30..=0x39).contains(&carry[i]),
-                (0x30..=0x39).contains(&carry[after]));
+                (0x30..=0x39).contains(&carry[after]),
+            );
             match expr {
                 (true, false, true) => {
                     let start = before
@@ -188,7 +272,7 @@ fn process_line(line: &str, carry: &mut [u8], next_carry: &mut [u8]) -> u64 {
                             .rev()
                             .take_while(|b| (0x30..=0x39).contains(*b))
                             .count();
-                    let end = if set { i + 1} else {i};
+                    let end = if set { i + 1 } else { i };
                     total += std::str::from_utf8(&carry[start..end])
                         .unwrap()
                         .parse::<u64>()
@@ -234,12 +318,10 @@ fn p2(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
     //    let adj_nums = 0;
     //}
     //if let Some(pos) = last.as_ref().as_bytes().iter().position(|b| *b == 0x2A) {
-    //    
+    //
     //}
     //while let Some(line) = input.next(){
     //    let current = line.as_ref();
-
-
 
     //    scnd_last = last;
     //    last = line;
@@ -280,7 +362,9 @@ mod tests {
 "..691*.....700..708................-...357........*........$177......%..244.............................762.453....477-.707..-168..359*.....",
 ".......................394.443....456......750..................71.160.....*..183.........835..74.........*.............../............129..",
         ];
-        assert_eq!(p1(input.into_iter()), 688 + 95 + 728 + 896 + 153
+        assert_eq!(
+            p1(input.into_iter()),
+            688 + 95 + 728 + 896 + 153
             // line 2
             + 122 + 509
             // line 3
@@ -291,7 +375,7 @@ mod tests {
             + 691 + 700 + 708 + 357 + 177 + 244 + 453 + 762 + 707 + 477 + 168 + 359
             // line 6
             + 456 + 160 + 129
-            );
+        );
     }
 
     #[test]
@@ -303,10 +387,7 @@ mod tests {
 
     #[test]
     fn edges() {
-        let input = vec![
-            "357.123",
-            "...*..."
-        ];
+        let input = vec!["357.123", "...*..."];
 
         assert_eq!(p1(input.into_iter()), 480);
     }
