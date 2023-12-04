@@ -20,11 +20,11 @@ fn p1(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
     let mut total = 0u64;
     for l in input {
         let bytes = l.as_ref().as_bytes();
-        let first = bytes.iter().find(|&&b| (0x30..0x40).contains(&b)).unwrap();
+        let first = bytes.iter().find(|&&b| (0x30..=0x39).contains(&b)).unwrap();
         let last = bytes
             .iter()
             .rev()
-            .find(|&&b| (0x30..0x40).contains(&b))
+            .find(|&&b| (0x30..0x39).contains(&b))
             .unwrap();
         let buf = [*first, *last];
         let string = std::str::from_utf8(&buf[..]).unwrap();
@@ -64,7 +64,7 @@ fn find_digit(bytes: &[u8]) -> (u8, &[u8]) {
     let len = bytes.len();
     for i in 0..len {
         let b = bytes[i];
-        if (0x30..0x40).contains(&b) {
+        if (0x30..=0x39).contains(&b) {
             return (b, &bytes[i+1..]);
         }
 
