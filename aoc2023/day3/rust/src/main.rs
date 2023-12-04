@@ -1,6 +1,6 @@
 use std::io::{stdin, BufRead};
 
-    pub const DOT: u8 = 0x2E;
+pub const DOT: u8 = 0x2E;
 fn main() {
     match std::env::args().nth(1).map(|s| s.parse::<u32>().unwrap()) {
         Some(1) => println!(
@@ -21,40 +21,13 @@ fn main() {
     }
 }
 
-#[derive(Debug, PartialEq)]
-enum ReadState {
-    None,
-    Symbol,
-    PartNumber,
-    Digit,
-}
-
 fn p1(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
-    let mut last_line = input.next().unwrap();
-    // mask tells us what numbers are still to evaluate and the symbols of the last line.
-    let mut carry = (0..last_line.as_ref().as_bytes().len())
-        .map(|_| 0x2E)
-        .collect::<Vec<_>>();
-    carry.fill(0x2E);
-    let mut carry_next = carry.clone();
-    carry_next.fill(0x2E);
-    let mut total = process_line(last_line.as_ref(), &mut carry[..], &mut carry_next[..]);
-    for current in input {
-        assert_eq!(last_line.as_ref().len(), current.as_ref().len());
-        total += process_line(current.as_ref(), &mut carry[..], &mut carry_next[..]);
-        last_line = current;
-    }
-
-    total
-}
-
-fn p1_alt(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
     let mut total = 0;
     let pad_once = &[DOT];
 
     let mut mid = input.next().unwrap();
     let mut bot = input.next().unwrap();
-    let dot_line = std::iter::repeat(&DOT).take(mid.as_ref().as_bytes().len() + 2);
+    let mut dot_line = std::iter::repeat(&DOT).take(mid.as_ref().as_bytes().len() + 2);
 
     total += process_lines(
         &mut dot_line.clone(),
@@ -66,22 +39,13 @@ fn p1_alt(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
             .iter()
             .chain(bot.as_ref().as_bytes())
             .chain(pad_once.iter()),
+        mid.as_ref().as_bytes(),
     );
 
-    loop {
-        let top = mid;
-        mid = bot;
-        let mut bot_iter = if let Some(new) = input.next() {
-            bot = new;
-            pad_once
-                .iter()
-                .chain(bot.as_ref().as_bytes())
-                .chain(pad_once.iter())
-        } else {
-            // do one more iter with padding
-            break;
-        };
-
+    let mut top = mid;
+    mid = bot;
+    while let Some(new) = input.next() {
+        bot = new;
         total += process_lines(
             &mut pad_once
                 .iter()
@@ -91,11 +55,40 @@ fn p1_alt(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
                 .iter()
                 .chain(mid.as_ref().as_bytes())
                 .chain(pad_once.iter()),
-            &mut bot_iter,
+            &mut pad_once
+                .iter()
+                .chain(bot.as_ref().as_bytes())
+                .chain(pad_once.iter()),
+            mid.as_ref().as_bytes(),
         );
+        top = mid;
+        mid = bot;
     }
 
+    // do one more iter with padding
+    total += process_lines(
+        &mut pad_once
+            .iter()
+            .chain(top.as_ref().as_bytes())
+            .chain(pad_once.iter()),
+        &mut pad_once
+            .iter()
+            .chain(mid.as_ref().as_bytes())
+            .chain(pad_once.iter()),
+        &mut dot_line,
+        mid.as_ref().as_bytes(),
+    );
+
     total
+}
+
+#[derive(Debug, PartialEq)]
+enum ReadState {
+    None,
+    SymbolMid,
+    PartNumber,
+    SymbolTopBot,
+    Digit,
 }
 
 fn process_lines<
@@ -107,208 +100,71 @@ fn process_lines<
     top: &mut I1,
     mid: &mut I2,
     bot: &mut I3,
+    data: &[u8],
 ) -> u64 {
+    let iter = top
+        .zip(mid.zip(bot))
+        .skip(1)
+        .map(|v| (*v.0, *v.1 .0, *v.1 .1));
 
-    let iter = top.zip(mid.zip(bot)).skip(1);
-
-    //let mut state = ReadState::None;
-    //for slice in iter {
-    //    state = match (state, slice) {
-    //        (ReadState::None,DOT) => ReadState::None
-    //        (ReadState::None,0x30..=0x39) => ReadState::None
-    //        (ReadState::None,DOT) => ReadState::None
-    //         => {}
-
-
-    //    }
-
-    //}
-
-    0
-}
-
-
-
-fn process_line(line: &str, carry: &mut [u8], next_carry: &mut [u8]) -> u64 {
     let mut total = 0;
     let mut state = ReadState::None;
     let mut num_start = 0;
-    let line_bytes = line.as_bytes();
-    assert_eq!(line_bytes.len(), carry.len());
-    assert_eq!(line_bytes.len(), next_carry.len());
-
-    for idx in 0..line_bytes.len() {
-        state = match (state, line_bytes[idx], carry[idx]) {
-            //  .
-            // ..
-            (ReadState::None, 0x2E, 0x2E | 0x30..=0x39) => ReadState::None,
-            (ReadState::None, 0x2E, _) => ReadState::Symbol,
-            //  .
-            // .1
-            (ReadState::None, 0x30..=0x39, 0x2E | 0x30..=0x39) => {
+    for (idx, slice) in iter.enumerate() {
+        state = match (state, check(slice)) {
+            (ReadState::None, ReadState::Digit) => {
                 num_start = idx;
                 ReadState::Digit
             }
-            (ReadState::None, 0x30..=0x39, _) => {
+            (ReadState::None, ReadState::PartNumber) => {
                 num_start = idx;
                 ReadState::PartNumber
             }
-            //  1
-            // .$
-            (ReadState::None, s, _) => {
-                next_carry[idx] = s;
-                ReadState::Symbol
-            }
-            (ReadState::Digit, 0x2E, 0x2E | 0x30..=0x39) => {
-                next_carry[num_start..idx].copy_from_slice(&line_bytes[num_start..idx]);
-                ReadState::None
-            }
-            (ReadState::Digit, 0x2E, _) => {
-                next_carry[num_start..idx].copy_from_slice(&line_bytes[num_start..idx]);
-                total += std::str::from_utf8(&line_bytes[num_start..idx])
+            (ReadState::None, s) => s,
+            (ReadState::Digit, s) if s == ReadState::SymbolTopBot || s == ReadState::SymbolMid => {
+                // build number
+                total += std::str::from_utf8(&data[num_start..idx])
                     .unwrap()
                     .parse::<u64>()
                     .unwrap();
-                ReadState::Symbol
+                s
             }
-            (ReadState::Digit, 0x30..=0x39, 0x2E | 0x30..=0x39) => ReadState::Digit,
-            (ReadState::Digit, 0x30..=0x39, _) => ReadState::PartNumber,
-            (ReadState::Digit, s, _) => {
-                next_carry[idx] = s;
-                total += std::str::from_utf8(&line_bytes[num_start..idx])
+            (ReadState::Digit, s) => s,
+            (ReadState::PartNumber, ReadState::PartNumber | ReadState::Digit) => {
+                ReadState::PartNumber
+            }
+            (ReadState::PartNumber, s) => {
+                // build number
+                total += std::str::from_utf8(&data[num_start..idx])
                     .unwrap()
                     .parse::<u64>()
                     .unwrap();
-                ReadState::Symbol
+                s
             }
-            (ReadState::Symbol, 0x2E, _) => ReadState::None,
-            (ReadState::Symbol, 0x30..=0x39, _) => {
+            (
+                ReadState::SymbolMid | ReadState::SymbolTopBot,
+                ReadState::Digit | ReadState::PartNumber,
+            ) => {
                 num_start = idx;
                 ReadState::PartNumber
             }
-            (ReadState::Symbol, s, _) => {
-                next_carry[idx] = s;
-                ReadState::Symbol
-            }
-            (ReadState::PartNumber, 0x30..=0x39, _) => ReadState::PartNumber,
-            (ReadState::PartNumber, 0x2E, _) => {
-                total += std::str::from_utf8(&line_bytes[num_start..idx])
-                    .unwrap()
-                    .parse::<u64>()
-                    .unwrap();
-                ReadState::None
-            }
-            (ReadState::PartNumber, s, _) => {
-                next_carry[idx] = s;
-                ReadState::Symbol
-            }
+            (_, s) => s,
         }
     }
 
-    if state == ReadState::Digit {
-        next_carry[num_start..].copy_from_slice(&line_bytes[num_start..]);
-    }
-
-    let mut i = 0;
-    loop {
-        if i >= next_carry.len() {
-            break;
-        }
-
-        let val = next_carry[i];
-        if val != 0x2E && !(0x30..=0x39).contains(&val) {
-            // hit a symbol
-            let before = i.saturating_sub(1);
-            let after = std::cmp::min(i + 1, carry.len());
-            let expr = (
-                (0x30..=0x39).contains(&carry[before]),
-                (0x30..=0x39).contains(&carry[i]),
-                (0x30..=0x39).contains(&carry[after]),
-            );
-            match expr {
-                (true, false, true) => {
-                    let start = before
-                        - carry[..before]
-                            .iter()
-                            .rev()
-                            .take_while(|b| (0x30..=0x39).contains(*b))
-                            .count();
-                    total += std::str::from_utf8(&carry[start..i])
-                        .unwrap()
-                        .parse::<u64>()
-                        .unwrap();
-
-                    let end = after
-                        + carry[after..]
-                            .iter()
-                            .take_while(|b| (0x30..=0x39).contains(*b))
-                            .count();
-                    total += std::str::from_utf8(&carry[after..end])
-                        .unwrap()
-                        .parse::<u64>()
-                        .unwrap();
-                }
-                (true, true, true) => {
-                    let start = before
-                        - carry[..before]
-                            .iter()
-                            .rev()
-                            .take_while(|b| (0x30..=0x39).contains(*b))
-                            .count();
-                    let end = after
-                        + carry[after..]
-                            .iter()
-                            .take_while(|b| (0x30..=0x39).contains(*b))
-                            .count();
-                    total += std::str::from_utf8(&carry[start..end])
-                        .unwrap()
-                        .parse::<u64>()
-                        .unwrap();
-                }
-                (true, set, _) => {
-                    let start = before
-                        - carry[..before]
-                            .iter()
-                            .rev()
-                            .take_while(|b| (0x30..=0x39).contains(*b))
-                            .count();
-                    let end = if set { i + 1 } else { i };
-                    total += std::str::from_utf8(&carry[start..end])
-                        .unwrap()
-                        .parse::<u64>()
-                        .unwrap();
-                }
-                (_, true, _) => {
-                    let end = i + carry[i..]
-                        .iter()
-                        .take_while(|b| (0x30..=0x39).contains(*b))
-                        .count();
-                    total += std::str::from_utf8(&carry[i..end])
-                        .unwrap()
-                        .parse::<u64>()
-                        .unwrap();
-                }
-                (_, _, true) => {
-                    let end = after
-                        + carry[after..]
-                            .iter()
-                            .take_while(|b| (0x30..=0x39).contains(*b))
-                            .count();
-                    total += std::str::from_utf8(&carry[after..end])
-                        .unwrap()
-                        .parse::<u64>()
-                        .unwrap();
-                    i = end;
-                }
-                (_, _, _) => {}
-            }
-        }
-        i += 1;
-    }
-
-    carry.copy_from_slice(next_carry);
-    next_carry.fill(0x2E);
     total
+}
+
+fn check(sl: (u8, u8, u8)) -> ReadState {
+    match (sl.0, sl.1, sl.2) {
+        // above and below are not a symbol
+        (DOT | 0x30..=0x39, DOT, DOT | 0x30..=0x39) => ReadState::None,
+        (DOT | 0x30..=0x39, 0x30..=0x39, DOT | 0x30..=0x39) => ReadState::Digit,
+        // symbol above or below
+        (_, DOT, _) => ReadState::SymbolTopBot,
+        (_, 0x30..=0x39, _) => ReadState::PartNumber,
+        (_, _, _) => ReadState::SymbolMid,
+    }
 }
 
 fn p2(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
