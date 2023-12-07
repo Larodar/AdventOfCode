@@ -1,6 +1,7 @@
 use std::{
     borrow::BorrowMut,
     io::{stdin, BufRead},
+    ops::Range,
 };
 
 fn main() {
@@ -92,6 +93,7 @@ fn p2(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
         .map(|pair| pair[0]..(pair[0] + pair[1]))
         .collect::<Vec<_>>();
 
+    let mut transformed = vec![];
     while let Some(l) = input.find(|l| !l.as_ref().is_empty()) {
         assert!(l.as_ref().ends_with(':'));
         let mappings = input
@@ -110,70 +112,75 @@ fn p2(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
             })
             .collect::<Vec<_>>();
 
-        let mut new_ranges = vec![];
-        for item in &mut seeds.iter_mut() {
-            for r in mappings.iter() {
-                println!("{:?} with {:?}",&item, r);
-                let dst = r.0;
-                let lower = r.1;
-                let upper = lower + r.2;
-                let distance = dst - lower;
-                match (
-                    (lower..upper).contains(&item.start),
-                    (lower..upper).contains(&item.end),
-                    (item.start < lower && item.end > upper),
-                ) {
-                    (_,_, true) => {
-                        // |---------------|---------|------|
-                        // item.start    lower      upper   item.end
-                        let r1 = (lower + distance)..(upper + distance);
-                        let r2 = upper..item.end;
-                        *item = item.start..lower;
-                        println!("1: {:?}, {:?}, {:?}",item, &r1, &r2);
-                        new_ranges.push(r1);
-                        new_ranges.push(r2);
-                        break;
-                    }
-                    (true, true, _) => {
-                        // |---------------|---------|---------|
-                        // lower    item.start    item.end  upper
-                        *item = (item.start + distance)..(item.end + distance);
-                        println!("2: {:?}", item);
-                        break;
-                    }
-                    (true, false, _) => {
-                        // |---------------|---------|---------|
-                        // lower    item.start    upper     item.end
-                        // lower part of seed range is in mapping
-                        let r = (item.start + distance)..(upper + distance);
-                        *item = upper..item.end;
-                        println!("2: {:?}, {:?}", item, &r);
-                        new_ranges.push(r);
-                        break;
-                    }
-                    (false, true, _) => {
-                        // |---------------|---------|---------|
-                        // item.start    lower    item.end    upper
-                        // upper part of seed range is in mapping
-                        let r = (lower + distance)..(item.end + distance);
-                        *item = item.start..lower;
-                        println!("2: {:?}, {:?}", item, &r);
-                        new_ranges.push(r);
-                        break;
-                    }
-                    (false, false, _) => println!("skip!")
-                }
-            }
-        }
+        transform(&mut seeds, &mappings[..], &mut transformed);
 
         seeds.retain(|s| !s.is_empty());
-        for r in new_ranges.into_iter() {
+        while let Some(r) = transformed.pop() {
             assert!(!r.is_empty());
             seeds.push(r);
         }
     }
 
-    seeds.into_iter().map(|r| r.start).min().unwrap() as u64
+    seeds.into_iter().map(|r| dbg!(r.start)).min().unwrap() as u64
+}
+
+fn transform(
+    seeds: &mut Vec<Range<i64>>,
+    mappings: &[(i64, i64, i64)],
+    transformed: &mut Vec<Range<i64>>,
+) {
+    let mut idx = 0;
+    loop {
+        if idx >= seeds.len() {
+            break;
+        }
+
+        let item = seeds[idx].clone();
+        for r in mappings.iter() {
+            let dst = r.0;
+            let lower = r.1;
+            let upper = lower + r.2;
+            let distance = dst - lower;
+            match (
+                (lower..upper).contains(&item.start),
+                (lower..upper).contains(&item.end),
+                (item.start < lower && item.end > upper),
+            ) {
+                (false, false, true) => {
+                    // |---------------|---------|------|
+                    // item.start    lower      upper   item.end
+                    transformed.push((lower + distance)..(upper + distance));
+                    seeds.push(upper..item.end);
+                    seeds[idx].end = lower;
+                    break;
+                }
+                (true, true, _) => {
+                    // |---------------|---------|---------|
+                    // lower    item.start    item.end  upper
+                    seeds[idx] = (item.start + distance)..(item.end + distance);
+                    break;
+                }
+                (true, false, _) => {
+                    // |---------------|---------|---------|
+                    // lower    item.start    upper     item.end
+                    // lower part of seed range is in mapping
+                    transformed.push((item.start + distance)..(upper + distance));
+                    seeds[idx].start = upper;
+                    break;
+                }
+                (false, true, _) => {
+                    // |---------------|---------|---------|
+                    // item.start    lower    item.end    upper
+                    // upper part of seed range is in mapping
+                    transformed.push((lower + distance)..(item.end + distance));
+                    seeds[idx].end = lower;
+                    break;
+                }
+                (false, false, _) => {}
+            }
+        }
+        idx += 1;
+    }
 }
 
 #[cfg(test)]
