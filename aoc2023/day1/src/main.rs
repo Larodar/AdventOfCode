@@ -1,11 +1,6 @@
-use std::{
-    io::{stdin, Read, BufRead},
-};
+use std::io::{stdin, BufRead};
 
 fn main() {
-    let mut buf = String::new();
-    _ = stdin().read_to_string(&mut buf).unwrap();
-
     match std::env::args()
         .nth(1)
         .map(|s| s.parse::<u32>().unwrap())
