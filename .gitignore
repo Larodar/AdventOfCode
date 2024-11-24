@@ -16,3 +16,5 @@ Cargo.lock
 **/bin/
 **/obj/
 **/*.d
+**/zig-out/
+**/.zig-cache/
