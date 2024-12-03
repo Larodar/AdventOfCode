@@ -55,4 +55,5 @@ fn p2(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
     lhs.into_iter()
         .map(|item| rhs.iter().filter(|i| **i == item).count() as u64 * item as u64)
         .sum::<u64>()
+    
 }
