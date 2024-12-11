@@ -85,12 +85,7 @@ fn p2(reader: anytype) !usize {
         }
 
         const u = update.items[0..];
-        std.debug.print("-----------------\n", .{});
         if (ord(rules.items[0..], u)) {
-            if (!check(rules.items[0..], u)) {
-                std.debug.print("{s}\n", .{l});
-                std.debug.print("-----------------\n", .{});
-            }
             const mid = try std.math.divFloor(usize, update.items.len, 2);
             total += @as(usize, update.items[mid]);
         }
@@ -101,16 +96,23 @@ fn p2(reader: anytype) !usize {
 
 fn ord(rules: []const Rule, u: []u8) bool {
     var ret = false;
-    for (rules) |r| {
-        if (std.mem.indexOfScalar(u8, u, r.first)) |pos| {
-            if (std.mem.indexOfScalar(u8, u[0..pos], r.second)) |found_at| {
+    var idx: usize = 1;
+    while (idx < u.len) {
+        const e = u[idx];
+
+        var rule_iter = ApplyRuleIterator(true).new(rules, e);
+        while (rule_iter.next()) |r| {
+            if (std.mem.indexOfScalar(u8, u[0..idx], r.second)) |at| {
                 ret = true;
-                std.debug.print("{d}|{d}; {d} -> {d}\n", .{r.first, r.second, found_at, pos});
-                std.mem.copyForwards(u8, u[found_at..pos], u[found_at + 1 .. pos]);
-                u[pos - 1] = r.first;
-                u[pos] = r.second;
+                const source = u[at + 1 .. idx + 1];
+                const dest = u[at..idx];
+                std.mem.copyForwards(u8, dest, source);
+                u[idx] = r.second;
+                idx -= 1;
             }
         }
+
+        idx += 1;
     }
 
     return ret;
@@ -129,26 +131,36 @@ fn check(rules: []const Rule, update: []const u8) bool {
     return true;
 }
 
-const ApplyRuleIterator = struct {
-    rules: []const Rule,
-    update: []const u8,
-    idx: usize,
+fn ApplyRuleIterator(comptime first: bool) type {
+    return struct {
+        const Self = @This();
+        rules: []const Rule,
+        val: u8,
 
-    fn new(rules: []const Rule, update: []const u8) ApplyRuleIterator {
-        return ApplyRuleIterator{
-            .rules = rules,
-            .update = update,
-            .idx = 0,
-        };
-    }
-
-    fn next(self: *ApplyRuleIterator) ?u8 {
-        const r = self.rules[self.idx];
-        if (std.mem.indexOf(u8, self.update, r.first)) |pos| {
-            _ = pos;
+        fn new(rules: []const Rule, val: u8) Self {
+            return Self{
+                .rules = rules,
+                .val = val,
+            };
         }
-    }
-};
+
+        fn next(self: *Self) ?Rule {
+            if (self.rules.len == 0) {
+                return null;
+            }
+
+            for (self.rules[0..], 0..) |value, i| {
+                const v = if (first) value.first else value.second;
+                if (v == self.val) {
+                    self.rules = self.rules[i + 1 ..];
+                    return value;
+                }
+            }
+
+            return null;
+        }
+    };
+}
 
 const Rule = packed struct { first: u8, second: u8 };
 
@@ -218,6 +230,37 @@ test "test p2" {
         \\75,97,47,61,53
         \\61,13,29
         \\97,13,75,29,47
+    ;
+    var stream = std.io.fixedBufferStream(input);
+    const reader = stream.reader();
+    try std.testing.expectEqual(@as(usize, 123), p2(&reader));
+}
+
+test "test p2 simple" {
+    const input =
+        \\47|53
+        \\97|13
+        \\97|61
+        \\97|47
+        \\75|29
+        \\61|13
+        \\75|53
+        \\29|13
+        \\97|29
+        \\53|29
+        \\61|53
+        \\97|53
+        \\61|29
+        \\47|13
+        \\75|47
+        \\97|75
+        \\47|61
+        \\75|61
+        \\47|29
+        \\75|13
+        \\53|13
+        \\
+        \\61,13,29
     ;
     var stream = std.io.fixedBufferStream(input);
     const reader = stream.reader();
