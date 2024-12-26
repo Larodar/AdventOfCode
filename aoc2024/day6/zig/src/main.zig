@@ -30,15 +30,11 @@ fn p1(reader: anytype) !usize {
     var width: usize = 0;
     if (try reader.readUntilDelimiterOrEof(buf[0..], '\n')) |l| {
         width = l.len;
-        for (l) |v| {
-            try data.append(Position{ .val = @truncate(v), .marked = 0 });
-        }
+        try data.appendSlice(l);
     }
 
     while (try reader.readUntilDelimiterOrEof(buf[0..], '\n')) |l| {
-        for (l) |v| {
-            try data.append(Position{ .val = @truncate(v), .marked = 0 });
-        }
+        try data.appendSlice(l);
     }
 
     const grid = Grid.init(data, width);
