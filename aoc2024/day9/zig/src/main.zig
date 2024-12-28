@@ -15,8 +15,7 @@ pub fn main() !void {
     if (problem == 1) {
         total = try p1(&stdin);
     } else if (problem == 2) {
-        unreachable;
-        //total = try p2(&stdin);
+        total = try p2(&stdin);
     }
 
     std.debug.print("result: {?}\n", .{total});
@@ -100,10 +99,6 @@ fn fill_gap(left_ptr: usize, right_ptr: *usize, file_id: *usize, empty_blocks: u
 
 fn calc_checksum(block: Position, idx: *usize) usize {
     var ret: usize = 0;
-    if (block.id == 0) {
-        idx.* += block.len;
-        return ret;
-    }
     const start = idx.*;
     idx.* += block.len;
     for (start..idx.*) |value| {
@@ -119,6 +114,76 @@ const Position = packed struct(u32) {
     len: u4,
     id: u28,
 };
+
+fn p2(reader: anytype) !usize {
+    const allocator = std.heap.page_allocator;
+    var buf = [_]u8{0} ** 4096;
+    var total: usize = 0;
+    var layout = std.ArrayList(u8).init(allocator);
+    defer layout.deinit();
+    while (true) {
+        const size = try reader.read(buf[0..]);
+        if (size == 0) {
+            break;
+        }
+        const l = buf[0..size];
+        for (l) |value| {
+            if (value < 0x30) {
+                continue;
+            }
+            try layout.append(value - 0x30);
+        }
+    }
+
+    const rev_idx = if (layout.items.len & 1 > 0) layout.items.len - 1 else layout.items.len - 2;
+    //std.debug.print("len: {d}; files_rev: {d}\n", .{layout.items.len, files_rev});
+    var fs_idx: usize = 0;
+    var idx: usize = 0;
+    while (idx < layout.items.len) {
+        var len = layout.items[idx];
+        if (idx & 1 == 0) {
+            if (len > 128) {
+                // this is now a gap of size len - 128
+                len -= 128;
+            } else {
+                const pos = Position{ .len = @truncate(len), .id = @truncate(idx / 2) };
+                total += calc_checksum(pos, &fs_idx);
+                idx += 1;
+                continue;
+            }
+        }
+
+        std.debug.assert(len < 128);
+        var rev_i = rev_idx;
+        while (len > 0) {
+            if (rev_i <= idx) {
+                break;
+            }
+
+            const file_len = layout.items[rev_i];
+            if (file_len == 0 or len < file_len) {
+                rev_i -= 2;
+                continue;
+            }
+
+            const pos = Position{ .len = @truncate(file_len), .id = @truncate(rev_i / 2) };
+            total += calc_checksum(pos, &fs_idx);
+            len -= file_len;
+            // Flip the first bit to mark it as 'used'.
+            layout.items[rev_i] += 128;
+            rev_i -= 2;
+        }
+
+        if (len > 0) {
+            const pos = Position{ .len = @truncate(len), .id = 0 };
+            total += calc_checksum(pos, &fs_idx);
+        }
+
+        idx += 1;
+    }
+
+    return total;
+}
 
 test "test p1 ref" {
     const input = "2333133121414131402";
@@ -251,4 +316,11 @@ test "test fill_gap small" {
     try std.testing.expectEqual(4, f_id);
     try std.testing.expectEqual(2, r_ptr);
     try std.testing.expectEqual(1, input.items[2]);
+}
+
+test "test p2 ref" {
+    const input = "2333133121414131402";
+    var stream = std.io.fixedBufferStream(input);
+    const reader = stream.reader();
+    try std.testing.expectEqual(@as(usize, 2858), p2(&reader));
 }
