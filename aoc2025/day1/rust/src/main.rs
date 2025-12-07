@@ -44,7 +44,6 @@ fn p2(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
     for l in input.filter(|l| !l.as_ref().is_empty()) {
         let dir = l.as_ref().as_bytes()[0];
         let count: i64 = l.as_ref()[1..].parse().unwrap();
-        let old = dial;
         if dir == ('R' as u8) {
             let sum = dial + count;
             zero_passes += sum / 100;
@@ -62,12 +61,7 @@ fn p2(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
                 dial = diff;
             }
         }
-
-        println!(
-            "{} +- {}{} = {} | {}",
-            old, dir as char, count, dial, zero_passes
-        );
-    }
+   }
 
     zero_passes as u64
 }
