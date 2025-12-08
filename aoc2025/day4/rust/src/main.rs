@@ -1,4 +1,4 @@
-use std::{io::stdin, ops::Deref};
+use std::io::stdin;
 
 const DOT: u8 = '.' as u8;
 fn main() {
@@ -21,28 +21,13 @@ fn p1(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
     let mut total = 0;
     let mut test_count = 0;
     while let Some(p) = grid.position_offset('@' as u8, start) {
-        let count = grid.get(p.up()).map_or(0, |p| if p == DOT { 0 } else { 1 })
-            + grid
-                .get(p.up_right())
-                .map_or(0, |p| if p == DOT { 0 } else { 1 })
-            + grid
-                .get(p.right())
-                .map_or(0, |p| if p == DOT { 0 } else { 1 })
-            + grid
-                .get(p.down_right())
-                .map_or(0, |p| if p == DOT { 0 } else { 1 })
-            + grid
-                .get(p.down())
-                .map_or(0, |p| if p == DOT { 0 } else { 1 })
-            + grid
-                .get(p.down_left())
-                .map_or(0, |p| if p == DOT { 0 } else { 1 })
-            + grid
-                .get(p.left())
-                .map_or(0, |p| if p == DOT { 0 } else { 1 })
-            + grid
-                .get(p.up_left())
-                .map_or(0, |p| if p == DOT { 0 } else { 1 });
+        let mut count = 0;
+        for p in p.surrounding() {
+            if grid.get(p) == Some(b'@') {
+                count += 1;
+            }
+        }
+
         if count < 4 {
             total += 1;
         }
@@ -159,14 +144,9 @@ impl GridPos {
             row: self.row,
         }
     }
-}
 
-#[derive(Debug, Copy, Clone)]
-struct GridPtr(usize);
-impl Deref for GridPtr {
-    type Target = usize;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    pub fn surrounding(&self) -> SurroundingIter {
+        SurroundingIter::new(*self)
     }
 }
 
@@ -211,24 +191,26 @@ impl<const PADDING: u8> PaddedGrid<PADDING> {
     }
 
     fn calc_index(&self, pos: GridPos) -> usize {
-        self.width + pos.row * self.width + pos.col + 1
+        pos.row * self.width + pos.col
+    }
+
+    fn calc_pos(&self, idx: usize) -> GridPos {
+        GridPos::new(idx % self.width, idx / self.width)
     }
 
     fn move_one(&self, pos: GridPos) -> Option<GridPos> {
-        // assumes padding
-        if pos.col == self.width - 2 {
-            if pos.row == self.rows {
-                return None;
-            } else {
-                return Some(GridPos::new(1, pos.row + 1));
-            }
+        let col = (pos.col + 1) % (self.width - 2);
+        let row = if col == 0 { pos.row + 1 } else { pos.row };
+
+        if row >= self.rows - 2 {
+            None
         } else {
-            return Some(GridPos::new(pos.col + 1, pos.row));
+            Some(GridPos::new(col, row))
         }
     }
 
     fn get(&self, pos: GridPos) -> Option<u8> {
-        if pos.row + 2 >= self.rows || pos.col + 2 >= self.width {
+        if pos.row >= self.rows || pos.col >= self.width {
             return None;
         }
 
@@ -241,31 +223,92 @@ impl<const PADDING: u8> PaddedGrid<PADDING> {
     }
 
     fn position(&self, needle: u8) -> Option<GridPos> {
-        if needle == PADDING {
-            return None;
-        }
-
-        self.inner.iter().position(|b| *b == needle).map(|some| {
-            let row = (some / self.width) - 1;
-            let col = (some % self.width) - 1;
-            GridPos { row, col }
-        })
+        self.inner
+            .iter()
+            .position(|b| *b == needle)
+            .map(|some| self.calc_pos(some))
     }
 
     fn position_offset(&self, needle: u8, offset: GridPos) -> Option<GridPos> {
-        if needle == PADDING {
-            return None;
-        }
-
         let start = self.calc_index(offset);
         self.inner[start..self.inner.len() - self.width]
             .iter()
             .position(|b| *b == needle)
-            .map(|some| {
-                let row = ((some + start) / self.width) - 1;
-                let col = ((some + start) % self.width) - 1;
-                GridPos { row, col }
-            })
+            .map(|some| self.calc_pos(some))
+    }
+
+    pub fn points(&self) -> PointIter<'_, PADDING> {
+        PointIter {
+            grid: self,
+            col: 0,
+            row: 0,
+        }
+    }
+}
+
+struct PointIter<'a, const PADDING: u8> {
+    grid: &'a PaddedGrid<PADDING>,
+    col: usize,
+    row: usize,
+}
+
+impl<'a, const PADDING: u8> PointIter<'a, PADDING> {
+    fn new(grid: &'a PaddedGrid<PADDING>) -> PointIter<'a, PADDING> {
+        PointIter {
+            grid,
+            col: 1,
+            row: 1,
+        }
+    }
+}
+
+impl<'a, const PADDING: u8> Iterator for PointIter<'a, PADDING> {
+    type Item = GridPos;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.row >= self.grid.rows - 2 {
+            return None;
+        }
+        let col = self.col;
+        self.col = (self.col + 1) % (self.grid.width - 2);
+        let row = self.row;
+        self.row = if self.col == 0 { row + 1 } else { row };
+        Some(GridPos::new(col, row))
+    }
+}
+
+struct SurroundingIter {
+    pos: GridPos,
+    state: u8,
+}
+
+impl SurroundingIter {
+    fn new(pos: GridPos) -> Self {
+        SurroundingIter { pos, state: 7 }
+    }
+}
+
+impl Iterator for SurroundingIter {
+    type Item = GridPos;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.state == 0 {
+            return None;
+        }
+        let pos = match self.state {
+            0 => self.pos.up(),
+            1 => self.pos.up_right(),
+            2 => self.pos.up_left(),
+            3 => self.pos.left(),
+            4 => self.pos.right(),
+            5 => self.pos.down(),
+            6 => self.pos.down_left(),
+            7 => self.pos.down_right(),
+            _ => unreachable!(),
+        };
+
+        self.state -= 1;
+        Some(pos)
     }
 }
 
@@ -297,10 +340,14 @@ mod tests {
     fn index_grid() {
         let input = "a";
         let grid = PaddedGrid::<DOT>::from_iter(input.lines());
-        assert_eq!(Some('a' as u8), grid.get(GridPos::new(0, 0)));
-        assert_eq!(None, grid.get(GridPos::new(0, 1)));
-        assert_eq!(None, grid.get(GridPos::new(1, 0)));
-        assert_eq!(None, grid.get(GridPos::new(1, 1)));
+        assert_eq!(Some('a' as u8), grid.get(GridPos::new(1, 1)));
+        assert_eq!(Some(DOT), grid.get(GridPos::new(0, 1)));
+        assert_eq!(Some(DOT), grid.get(GridPos::new(1, 0)));
+        assert_eq!(Some(DOT), grid.get(GridPos::new(0, 0)));
+        assert_eq!(Some(DOT), grid.get(GridPos::new(2, 0)));
+        assert_eq!(Some(DOT), grid.get(GridPos::new(0, 2)));
+        assert_eq!(Some(DOT), grid.get(GridPos::new(1, 2)));
+        assert_eq!(Some(DOT), grid.get(GridPos::new(2, 2)));
     }
 
     #[test]
@@ -310,17 +357,19 @@ mod tests {
         const C: u8 = 'c' as u8;
         let input = vec!["aaa", "bbb", "ccc"];
         let grid = PaddedGrid::<DOT>::from_iter(input);
-        assert_eq!(Some(A), grid.get(GridPos::new(0, 0)));
-        assert_eq!(Some(A), grid.get(GridPos::new(1, 0)));
-        assert_eq!(Some(A), grid.get(GridPos::new(2, 0)));
-        assert_eq!(Some(B), grid.get(GridPos::new(0, 1)));
-        assert_eq!(Some(B), grid.get(GridPos::new(1, 1)));
-        assert_eq!(Some(B), grid.get(GridPos::new(2, 1)));
-        assert_eq!(Some(C), grid.get(GridPos::new(0, 2)));
-        assert_eq!(Some(C), grid.get(GridPos::new(1, 2)));
-        assert_eq!(Some(C), grid.get(GridPos::new(2, 2)));
-        assert_eq!(None, grid.get(GridPos::new(0, 3)));
-        assert_eq!(None, grid.get(GridPos::new(3, 2)));
+        assert_eq!(Some(A), grid.get(GridPos::new(1, 1)));
+        assert_eq!(Some(A), grid.get(GridPos::new(2, 1)));
+        assert_eq!(Some(A), grid.get(GridPos::new(3, 1)));
+        assert_eq!(Some(B), grid.get(GridPos::new(1, 2)));
+        assert_eq!(Some(B), grid.get(GridPos::new(2, 2)));
+        assert_eq!(Some(B), grid.get(GridPos::new(3, 2)));
+        assert_eq!(Some(C), grid.get(GridPos::new(1, 3)));
+        assert_eq!(Some(C), grid.get(GridPos::new(2, 3)));
+        assert_eq!(Some(C), grid.get(GridPos::new(3, 3)));
+        assert_eq!(Some(DOT), grid.get(GridPos::new(0, 0)));
+        assert_eq!(Some(DOT), grid.get(GridPos::new(4, 4)));
+        assert_eq!(Some(DOT), grid.get(GridPos::new(4, 0)));
+        assert_eq!(Some(DOT), grid.get(GridPos::new(0, 4)));
     }
 
     #[test]
@@ -329,8 +378,8 @@ mod tests {
         let input = vec!["a"];
         let grid = PaddedGrid::<DOT>::from_iter(input);
         assert_eq!(None, grid.position(0u8));
-        assert_eq!(None, grid.position(DOT));
-        assert_eq!(Some(GridPos::new(0, 0)), grid.position(A));
+        assert_eq!(Some(GridPos::new(0, 0)), grid.position(DOT));
+        assert_eq!(Some(GridPos::new(1, 1)), grid.position(A));
     }
 
     #[test]
@@ -339,11 +388,38 @@ mod tests {
         let input = vec!["a"];
         let grid = PaddedGrid::<DOT>::from_iter(input);
         assert_eq!(None, grid.position_offset(0u8, GridPos::new(0, 0)));
-        assert_eq!(None, grid.position_offset(DOT, GridPos::new(0, 0)));
         assert_eq!(
             Some(GridPos::new(0, 0)),
+            grid.position_offset(DOT, GridPos::new(0, 0))
+        );
+        assert_eq!(
+            Some(GridPos::new(1, 1)),
             grid.position_offset(A, GridPos::new(0, 0))
         );
+    }
+    #[test]
+    fn grid_position_advanced() {
+        let input = vec!["abc", "def", "ghi"];
+        let grid = PaddedGrid::<DOT>::from_iter(input);
+        assert_eq!(
+            Some(GridPos::new(3, 3)),
+            grid.position_offset(b'i', GridPos::new(0, 0))
+        );
+    }
+
+    #[test]
+    fn grid_move_one() {
+        let input = vec!["abc", "def", "ghi"];
+        let grid = PaddedGrid::<DOT>::from_iter(input);
+        assert_eq!(Some(GridPos::new(1, 0)), grid.move_one(GridPos::new(0, 0)));
+        assert_eq!(Some(GridPos::new(2, 0)), grid.move_one(GridPos::new(1, 0)));
+        assert_eq!(Some(GridPos::new(0, 1)), grid.move_one(GridPos::new(2, 0)));
+        assert_eq!(Some(GridPos::new(1, 1)), grid.move_one(GridPos::new(0, 1)));
+        assert_eq!(Some(GridPos::new(2, 1)), grid.move_one(GridPos::new(1, 1)));
+        assert_eq!(Some(GridPos::new(0, 2)), grid.move_one(GridPos::new(2, 1)));
+        assert_eq!(Some(GridPos::new(1, 2)), grid.move_one(GridPos::new(0, 2)));
+        assert_eq!(Some(GridPos::new(2, 2)), grid.move_one(GridPos::new(1, 2)));
+        assert_eq!(None, grid.move_one(GridPos::new(2, 2)));
     }
 
     #[test]
