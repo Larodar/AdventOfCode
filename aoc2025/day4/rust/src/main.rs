@@ -1,4 +1,4 @@
-use std::io::stdin;
+use std::{fmt::Display, io::stdin};
 
 const DOT: u8 = '.' as u8;
 fn main() {
@@ -19,7 +19,6 @@ fn p1(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
     let mut start = GridPos::new(1, 1);
 
     let mut total = 0;
-    let mut test_count = 0;
     while let Some(p) = grid.position_offset('@' as u8, start) {
         let mut count = 0;
         for p in p.surrounding() {
@@ -29,19 +28,49 @@ fn p1(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
         }
 
         if count < 4 {
-            eprintln!("Candidate at {:?} with {count} surrounding", p);
             total += 1;
         }
 
-        test_count += 1;
-        if test_count > 100 {
-            panic!();
-        }
         if let Some(new_start) = grid.move_one(p) {
             start = new_start;
         } else {
             break;
         }
+    }
+
+    total
+}
+
+fn p2(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
+    let mut grid = PaddedGrid::<DOT>::from_iter(input);
+    let mut total = 0;
+    let mut partial = 1;
+
+    let mut ctr = 0;
+    while partial > 0 {
+        partial = 0;
+        let mut start = GridPos::new(1, 1);
+        while let Some(p) = grid.position_offset('@' as u8, start) {
+            let mut count = 0;
+            for p in p.surrounding() {
+                if grid.get(p) == Some(b'@') {
+                    count += 1;
+                }
+            }
+
+            if count < 4 {
+                *grid.get_mut(p).unwrap() = b'x';
+                partial += 1;
+            }
+
+            if let Some(new_start) = grid.move_one(p) {
+                start = new_start;
+            } else {
+                break;
+            }
+        }
+
+        total += partial;
     }
 
     total
@@ -227,6 +256,19 @@ impl<const PADDING: u8> PaddedGrid<PADDING> {
         return Some(self.inner[idx]);
     }
 
+    fn get_mut(&mut self, pos: GridPos) -> Option<&mut u8> {
+        if pos.row >= self.rows || pos.col >= self.width {
+            return None;
+        }
+
+        let idx = self.calc_index(pos);
+        if idx >= self.inner.len() {
+            return None;
+        }
+
+        return Some(&mut self.inner[idx]);
+    }
+
     fn position(&self, needle: u8) -> Option<GridPos> {
         self.inner
             .iter()
@@ -248,6 +290,16 @@ impl<const PADDING: u8> PaddedGrid<PADDING> {
             col: 0,
             row: 0,
         }
+    }
+}
+
+impl<const PADDING: u8> Display for PaddedGrid<PADDING> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for c in self.inner.chunks(self.width) {
+            writeln!(f, "{}", std::str::from_utf8(c).unwrap())?;
+        }
+
+        Ok(())
     }
 }
 
@@ -315,10 +367,6 @@ impl Iterator for SurroundingIter {
         self.state -= 1;
         Some(pos)
     }
-}
-
-fn p2(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
-    0
 }
 
 #[cfg(test)]
@@ -435,7 +483,7 @@ mod tests {
     fn grid_surround() {
         let input = vec!["abc", "def", "ghi"];
         let grid = PaddedGrid::<DOT>::from_iter(input);
-        let p = GridPos::new(2,2);
+        let p = GridPos::new(2, 2);
         assert_eq!(Some(b'a'), grid.get(p.up_left()));
         assert_eq!(Some(b'b'), grid.get(p.up()));
         assert_eq!(Some(b'c'), grid.get(p.up_right()));
@@ -448,16 +496,16 @@ mod tests {
 
     #[test]
     fn grid_surround_iter() {
-        let p = GridPos::new(2,2);
+        let p = GridPos::new(2, 2);
         let mut iter = p.surrounding();
-        assert_eq!(Some(GridPos::new(1,1)), iter.next());
-        assert_eq!(Some(GridPos::new(2,1)), iter.next());
-        assert_eq!(Some(GridPos::new(3,1)), iter.next());
-        assert_eq!(Some(GridPos::new(3,2)), iter.next());
-        assert_eq!(Some(GridPos::new(3,3)), iter.next());
-        assert_eq!(Some(GridPos::new(2,3)), iter.next());
-        assert_eq!(Some(GridPos::new(1,3)), iter.next());
-        assert_eq!(Some(GridPos::new(1,2)), iter.next());
+        assert_eq!(Some(GridPos::new(1, 1)), iter.next());
+        assert_eq!(Some(GridPos::new(2, 1)), iter.next());
+        assert_eq!(Some(GridPos::new(3, 1)), iter.next());
+        assert_eq!(Some(GridPos::new(3, 2)), iter.next());
+        assert_eq!(Some(GridPos::new(3, 3)), iter.next());
+        assert_eq!(Some(GridPos::new(2, 3)), iter.next());
+        assert_eq!(Some(GridPos::new(1, 3)), iter.next());
+        assert_eq!(Some(GridPos::new(1, 2)), iter.next());
     }
 
     #[test]
@@ -476,5 +524,23 @@ mod tests {
         ];
 
         assert_eq!(13, p1(input.iter()));
+    }
+
+    #[test]
+    fn p2_reference() {
+        let input = vec![
+            "..@@.@@@@.",
+            "@@@.@.@.@@",
+            "@@@@@.@.@@",
+            "@.@@@@..@.",
+            "@@.@@@@.@@",
+            ".@@@@@@@.@",
+            ".@.@.@.@@@",
+            "@.@@@.@@@@",
+            ".@@@@@@@@.",
+            "@.@.@@@.@.",
+        ];
+
+        assert_eq!(43, p2(input.iter()));
     }
 }
