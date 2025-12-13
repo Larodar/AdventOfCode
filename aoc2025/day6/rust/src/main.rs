@@ -75,23 +75,19 @@ fn p2(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
         let first_char = l.trim_start().as_bytes()[0];
         if matches!(first_char, b'*' | b'+') {
             let bytes = l.as_bytes();
-            let mut state = Op::Skip;
-            for b in bytes {
-                if *b == b'+' {
+            let mut state = if bytes[0] == b'+' { Op::Add } else { Op::Mul };
+            ops.push(state);
+            for i in 1..bytes.len() {
+                let b = bytes[i];
+                if b == b'+' {
                     state = Op::Add;
-                } else if *b == b'*' {
+                    ops[i - 1] = Op::Skip;
+                } else if b == b'*' {
                     state = Op::Mul;
+                    ops[i - 1] = Op::Skip;
                 }
 
                 ops.push(state);
-            }
-
-            let mut last_op = ops[0];
-            for i in 1..ops.len() {
-                if last_op != ops[i] {
-                    ops[i - 1] = Op::Skip;
-                }
-                last_op = ops[i];
             }
         } else {
             lines.push(
@@ -108,6 +104,8 @@ fn p2(input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
         .map(|i| 10u64.pow(i as u32))
         .collect::<Vec<_>>();
 
+    dbg!(&lines);
+    dbg!(&ops);
     let mut total = 0;
     let mut buf = [0u8; 32];
     let mut last_op = Op::Skip;
@@ -171,5 +169,19 @@ mod tests {
         ];
 
         assert_eq!(3263827, p2(input.iter()));
+    }
+
+    #[test]
+    fn p2_test_1() {
+        let input = vec!["1    ", "  1  ", "    1", "* * *"];
+
+        assert_eq!(3, p2(input.iter()));
+    }
+
+    #[test]
+    fn p2_test_2() {
+        let input = vec!["1    ", "  1  ", "    1", "+ + +"];
+
+        assert_eq!(3, p2(input.iter()));
     }
 }
