@@ -66,23 +66,25 @@ fn p2(mut input: impl Iterator<Item = impl AsRef<str>>) -> u64 {
         .iter()
         .position(|b| *b == b'S')
         .unwrap();
-    let mut lanes = iter::repeat_n(0u16, first.as_ref().as_bytes().len()).collect::<Vec<_>>();
+    let mut lanes = iter::repeat_n(0u64, first.as_ref().as_bytes().len()).collect::<Vec<_>>();
     let mut new_lanes = lanes.clone();
     lanes[idx] = 1;
     for l in input {
         let l = l.as_ref();
         let bytes = l.as_bytes();
+        for i in 0..new_lanes.len() {
+            new_lanes[i] = 0;
+        }
         for (i, cnt) in lanes.iter().enumerate().filter(|(_, cnt)| **cnt > 0) {
             if bytes[i] == b'^' {
                 new_lanes[i + 1] += cnt;
                 new_lanes[i - 1] += cnt;
                 new_lanes[i] = 0;
             } else {
-                new_lanes[i] = *cnt;
+                new_lanes[i] += cnt;
             }
         }
 
-        dbg!(&new_lanes);
         lanes.copy_from_slice(&new_lanes);
     }
 
@@ -139,5 +141,64 @@ mod tests {
         ];
 
         assert_eq!(40, p2(input.into_iter()));
+    }
+
+    #[test]
+    fn p2_reference_2() {
+        let input = vec![
+            ".......S.......",
+            "...............",
+            ".......^.......",
+            "...............",
+        ];
+
+        assert_eq!(2, p2(input.into_iter()));
+    }
+
+    #[test]
+    fn p2_reference_3() {
+        let input = vec![
+            ".......S.......",
+            "...............",
+            ".......^.......",
+            "...............",
+            "......^.^......",
+            "...............",
+        ];
+
+        assert_eq!(4, p2(input.into_iter()));
+    }
+
+    #[test]
+    fn p2_reference_4() {
+        let input = vec![
+            ".......S.......",
+            "...............",
+            ".......^.......",
+            "...............",
+            "......^........",
+            "...............",
+            "......^.^......",
+            "...............",
+        ];
+
+        assert_eq!(4, p2(input.into_iter()));
+    }
+
+    #[test]
+    fn p2_reference_5() {
+        let input = vec![
+            ".......S.......",
+            "...............",
+            ".......^.......",
+            "...............",
+            "......^........",
+            "...............",
+            "......^.^......",
+            "...............",
+            "...............",
+        ];
+
+        assert_eq!(4, p2(input.into_iter()));
     }
 }
